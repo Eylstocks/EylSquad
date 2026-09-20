@@ -87,6 +87,7 @@ input.bad,select.bad{border-color:var(--loss)}
 .shots{display:flex;gap:8px;flex-wrap:wrap}
 .shot{position:relative}
 .shot img{width:120px;height:84px;object-fit:cover;border-radius:6px;border:1px solid var(--line);cursor:zoom-in;display:block;background:var(--hover)}
+.shot img.missing{font-size:11px;color:var(--muted);padding:6px;border:1px dashed var(--line2);cursor:default;object-fit:none}
 .shot button{position:absolute;top:4px;right:4px;border:0;border-radius:50%;width:22px;height:22px;background:var(--ink);color:var(--bg);cursor:pointer;line-height:1;font-size:14px}
 .drop{border:1px dashed var(--line2);border-radius:8px;padding:12px;color:var(--muted);font-size:13px;margin-top:8px}
 .mini{width:150px;padding:4px 10px;font-size:13px;border-radius:99px}
@@ -198,6 +199,7 @@ main{padding:18px 14px 80px}
     <button class="navb" data-go="form">New trade</button>
     <button class="navb" data-go="account">Account</button>
     <p class="note">All times are New York time.</p>
+    <p class="note" id="cloudstat" style="margin-top:6px"></p>
   </nav>
   <main id="main"></main>
 </div>
@@ -269,7 +271,7 @@ function dbPut(s,k,v){if(!storageOK){mem[s][k]=v;return Promise.resolve()}return
 function dbDel(s,k){if(!storageOK){delete mem[s][k];return Promise.resolve()}return tx(s,'readwrite',function(o){return o.delete(k)})}
 function dbKeys(s){return storageOK?tx(s,'readonly',function(o){return o.getAllKeys()}):Promise.resolve(Object.keys(mem[s]))}
 function dbClear(s){if(!storageOK){mem[s]={};return Promise.resolve()}return tx(s,'readwrite',function(o){return o.clear()})}
-function defaultState(){return{v:1,trades:[],cash:[],settings:{fee:0.65,lastSetup:'',lastBackup:''},lists:{setups:DEF_SETUPS.slice(),tags:DEF_TAGS.slice(),emotions:EMOTIONS.slice()},period:'all',curve:'pnl'}}
+function defaultState(){return{v:1,trades:[],cash:[],settings:{fee:0.65,lastSetup:'',lastBackup:''},lists:{setups:DEF_SETUPS.slice(),tags:DEF_TAGS.slice(),emotions:EMOTIONS.slice()},period:'all',curve:'pnl',purged:{}}}
 function save(){
   clearTimeout(saveT);
   saveT=setTimeout(function(){
@@ -285,7 +287,21 @@ function save(){
 document.addEventListener('visibilitychange',function(){if(document.visibilityState==='hidden'&&state&&saveT){clearTimeout(saveT);saveT=null;dbPut('kv','state',JSON.parse(JSON.stringify(state))).catch(function(){})}});
 function imgURL(id){if(urlCache[id])return Promise.resolve(urlCache[id]);return dbGet('img',id).then(function(b){if(!b)return null;return urlCache[id]=URL.createObjectURL(b)})}
 function compress(file){return createImageBitmap(file).then(function(b){var sc=Math.min(1,1600/b.width),c=document.createElement('canvas');c.width=Math.round(b.width*sc);c.height=Math.round(b.height*sc);c.getContext('2d').drawImage(b,0,0,c.width,c.height);return new Promise(function(r){c.toBlob(r,'image/jpeg',0.82)})})}
-function hydrate(){document.querySelectorAll('img[data-img]').forEach(function(i){imgURL(i.dataset.img).then(function(u){if(u)i.src=u})})}
+function loadImg(id){
+  return imgURL(id).then(function(u){
+    if(u)return u;
+    var au=window.auth&&window.auth.currentUser;if(!au||!window.cloudGetImage)return null;
+    return window.cloudGetImage(au.uid,id).then(function(d){
+      if(!d)return null;
+      return dbPut('img',id,dataURLToBlob(d)).then(function(){state.settings.imgUp=state.settings.imgUp||{};state.settings.imgUp[id]=1;return imgURL(id)});
+    }).catch(function(e){console.error('Screenshot download failed:',e);return null});
+  });
+}
+function hydrate(){document.querySelectorAll('img[data-img]').forEach(function(i){if(i.getAttribute('src'))return;loadImg(i.dataset.img).then(function(u){if(u){i.classList.remove('missing');i.src=u}else{i.classList.add('missing');i.alt='Screenshot not available on this device yet'}})})}
+function delImg(id){
+  dbDel('img',id);if(state&&state.settings&&state.settings.imgUp)delete state.settings.imgUp[id];
+  var au=window.auth&&window.auth.currentUser;if(au&&window.cloudDelImage)window.cloudDelImage(au.uid,id).catch(function(){});
+}
 
 /* ui helpers */
 var view={name:'dashboard'},draft=null,toastT=null,pendingRestore=null,downloads=null,armT=null;
@@ -513,15 +529,16 @@ function saveTrade(){
   var t={id:d.id||uid(),symbol:d.symbol.trim().toUpperCase(),market:d.market,dir:d.dir,strike:d.market==='option'?+d.strike:'',expiry:d.market==='option'?d.expiry:'',stockIn:+d.stockIn,stop:+d.stop,target:+d.target>0?+d.target:'',stockOut:+d.stockOut>0?+d.stockOut:'',
     execs:d.execs.map(function(x){return{id:x.id,side:x.side,date:x.date,time:x.time.length===5?x.time+':00':x.time,qty:+x.qty,price:+x.price,fee:+x.fee||0}}),
     plan:d.plan,planAt:d.planAt,planEditedAfterExit:d.planEditedAfterExit,followed:d.followed,hindsight:d.hindsight,setup:d.setup,emotion:d.emotion,tags:d.tags.slice(),shots:d.shots.slice(),deletedAt:null};
+  t.updatedAt=Date.now();
   if(!prev||prev.plan!==t.plan){t.planAt=now.date+' '+now.time;if(prev&&prev.plan.trim()&&calc(prev).closed)t.planEditedAfterExit=true}
   if(!t.plan.trim()){t.planAt='';t.planEditedAfterExit=false}
-  (d._orig||[]).forEach(function(id){if(t.shots.indexOf(id)<0)dbDel('img',id)});
+  (d._orig||[]).forEach(function(id){if(t.shots.indexOf(id)<0)delImg(id)});
   if(prev)state.trades[state.trades.indexOf(prev)]=t;else state.trades.push(t);
   if(t.setup)state.settings.lastSetup=t.setup;
   save();var closed=calc(t).closed;draft=null;
   go('dashboard');toast(closed?'Trade saved':'Entry saved. It stays open until you add the exit.');
 }
-function cancelForm(){if(draft)draft.shots.forEach(function(id){if((draft._orig||[]).indexOf(id)<0)dbDel('img',id)});draft=null;go('dashboard')}
+function cancelForm(){if(draft)draft.shots.forEach(function(id){if((draft._orig||[]).indexOf(id)<0)delImg(id)});draft=null;go('dashboard')}
 function startEdit(id,addExit){
   var t=state.trades.find(function(x){return x.id===id});if(!t)return;
   draft=draftFrom(t);
@@ -529,9 +546,9 @@ function startEdit(id,addExit){
   go('form');
 }
 function softDelete(id){
-  var t=state.trades.find(function(x){return x.id===id});if(!t)return;t.deletedAt=nyNow().date;save();
+  var t=state.trades.find(function(x){return x.id===id});if(!t)return;t.deletedAt=nyNow().date;t.updatedAt=Date.now();save();
   if(view.name==='detail')go('dashboard');else render();
-  toast(t.symbol+' moved to Recently deleted',function(){t.deletedAt=null;save();render()});
+  toast(t.symbol+' moved to Recently deleted',function(){t.deletedAt=null;t.updatedAt=Date.now();save();render()});
 }
 VIEWS.deleted=function(){
   var list=state.trades.filter(function(t){return t.deletedAt});
@@ -592,16 +609,16 @@ var ACT={
   view:function(b){go('detail',{id:b.dataset.id,from:view.name})},
   edit:function(b){startEdit(b.dataset.id)},addexit:function(b){startEdit(b.dataset.id,true)},
   del:function(b){softDelete(b.dataset.id)},deleted:function(){go('deleted')},
-  restore:function(b){var t=state.trades.find(function(x){return x.id===b.dataset.id});t.deletedAt=null;save();render();toast('Restored '+t.symbol)},
+  restore:function(b){var t=state.trades.find(function(x){return x.id===b.dataset.id});t.deletedAt=null;t.updatedAt=Date.now();save();render();toast('Restored '+t.symbol)},
   purge:function(b){
-    if(b.dataset.armed){var t=state.trades.find(function(x){return x.id===b.dataset.id});t.shots.forEach(function(id){dbDel('img',id)});state.trades.splice(state.trades.indexOf(t),1);save();render();return}
+    if(b.dataset.armed){var t=state.trades.find(function(x){return x.id===b.dataset.id});t.shots.forEach(function(id){delImg(id)});state.purged[t.id]=Date.now();state.trades.splice(state.trades.indexOf(t),1);save();render();return}
     b.dataset.armed='1';b.textContent='Sure? Click again';clearTimeout(armT);armT=setTimeout(render,4000)},
   undo:function(){var el=$('#toast');if(el._undo)el._undo();el.hidden=true},
   zoom:function(b){imgURL(b.dataset.img).then(function(u){if(!u)return;var lb=$('#lb');lb.innerHTML='<img alt="Screenshot" src="'+u+'">';lb.hidden=false})},
   save:saveTrade,cancel:cancelForm,
   addex:function(){var n=nyNow(),d=draft,has=d.execs.some(function(x){return x.side!==entrySide(d)}),c=calc({market:d.market,dir:d.dir,execs:d.execs});d.execs.push({id:uid(),side:has?entrySide(d):(entrySide(d)==='sell'?'buy':'sell'),date:n.date,time:n.time,qty:String(c.eq||1),price:'',fee:String(state.settings.fee)});renderExecs()},
   rmex:function(b){draft.execs.splice(+b.dataset.i,1);renderExecs()},
-  rmshot:function(b){draft.shots=draft.shots.filter(function(i){return i!==b.dataset.id});if((draft._orig||[]).indexOf(b.dataset.id)<0)dbDel('img',b.dataset.id);renderShots()},
+  rmshot:function(b){draft.shots=draft.shots.filter(function(i){return i!==b.dataset.id});if((draft._orig||[]).indexOf(b.dataset.id)<0)delImg(b.dataset.id);renderShots()},
   copylast:function(){var l=sortedTrades()[0];if(!l)return;var t=l.t,d=blankDraft();d.symbol=t.symbol;d.market=t.market;d.dir=t.dir;d.strike=t.strike===''?'':String(t.strike);d.execs[0].side=entrySide(d);d.execs[0].qty=String(l.c.eq||1);d.setup=t.setup||d.setup;draft=d;render()},
   chip:function(b){
     var k=b.dataset.kind,v=b.dataset.v;
@@ -618,12 +635,12 @@ var ACT={
   cashtype:function(b){cashDraft.type=b.dataset.v;render()},
   cashsave:function(){
     var c=cashDraft;if(!c.date||!(+c.amount>0)){$('#cerr').textContent='Enter a date and an amount above zero.';return}
-    var e={id:c.id||uid(),type:c.type,date:c.date,amount:+c.amount,note:c.note.trim()};
+    var e={id:c.id||uid(),type:c.type,date:c.date,amount:+c.amount,note:c.note.trim(),updatedAt:Date.now()};
     if(c.id)state.cash[state.cash.findIndex(function(x){return x.id===c.id})]=e;else state.cash.push(e);
     cashDraft=null;save();render();toast(c.id?'Entry updated':'Entry added')},
   cashcancel:function(){cashDraft=null;render()},
   cashedit:function(b){var x=state.cash.find(function(c){return c.id===b.dataset.id});cashDraft={id:x.id,type:x.type,date:x.date,amount:String(x.amount),note:x.note||''};render();window.scrollTo(0,0)},
-  cashdel:function(b){var i=state.cash.findIndex(function(c){return c.id===b.dataset.id}),x=state.cash.splice(i,1)[0];save();render();toast('Entry deleted',function(){state.cash.splice(i,0,x);save();render()})},
+  cashdel:function(b){var i=state.cash.findIndex(function(c){return c.id===b.dataset.id}),x=state.cash.splice(i,1)[0];state.purged[x.id]=Date.now();save();render();toast('Entry deleted',function(){delete state.purged[x.id];x.updatedAt=Date.now();state.cash.splice(i,0,x);save();render()})},
   opentrade:function(b){go('detail',{id:b.dataset.id,from:'account'})},
   csv:doCsv,backup:doBackup,
   restorefile:function(b){var f=b.files[0];b.value='';if(!f)return;f.text().then(function(txt){var j=JSON.parse(txt);if(j.app!=='trade-journal'||!j.state||!Array.isArray(j.state.trades))throw 0;pendingRestore=j;render()}).catch(function(){toast("That file isn't a journal backup")})},
@@ -660,15 +677,75 @@ document.addEventListener('paste',function(e){
 document.addEventListener('dragover',function(e){if(view.name==='form')e.preventDefault()});
 document.addEventListener('drop',function(e){if(view.name!=='form')return;e.preventDefault();if(e.dataTransfer&&e.dataTransfer.files)addFiles(e.dataTransfer.files)});
 
+/* cloud sync */
+var syncBusy=false,syncAgain=false;
+function setCloud(t){var el=document.getElementById('cloudstat');if(el)el.textContent=t}
+function unionList(a,b){var r=(a||[]).slice();(b||[]).forEach(function(x){if(r.indexOf(x)<0)r.push(x)});return r}
+function mergeById(a,b,purged){var m={};[a||[],b||[]].forEach(function(list){list.forEach(function(x){if(!x||purged[x.id])return;var c=m[x.id];if(!c||(x.updatedAt||0)>(c.updatedAt||0))m[x.id]=x})});return Object.keys(m).map(function(k){return m[k]})}
+function mergeRemote(local,remote){
+  var r=remote||{},rl=r.lists||{},purged=Object.assign({},r.purged||{},local.purged||{});
+  return{trades:mergeById(local.trades,r.trades,purged),cash:mergeById(local.cash,r.cash,purged),lists:{setups:unionList(local.lists.setups,rl.setups),tags:unionList(local.lists.tags,rl.tags),emotions:unionList(local.lists.emotions,rl.emotions)},purged:purged};
+}
+function canon(v){if(Array.isArray(v))return'['+v.map(canon).join(',')+']';if(v&&typeof v==='object')return'{'+Object.keys(v).sort().map(function(k){return JSON.stringify(k)+':'+canon(v[k])}).join(',')+'}';return JSON.stringify(v)}
+function normBody(b){var byId=function(x,y){return String(x.id).localeCompare(String(y.id))};return{trades:(b.trades||[]).slice().sort(byId),cash:(b.cash||[]).slice().sort(byId),lists:{setups:(b.lists&&b.lists.setups)||[],tags:(b.lists&&b.lists.tags)||[],emotions:(b.lists&&b.lists.emotions)||[]},purged:b.purged||{}}}
+async function cloudImageData(blob){
+  var url=await blobToDataURL(blob);
+  if(url.length<=900000)return url;
+  var bmp=await createImageBitmap(blob),steps=[[1200,.72],[1000,.65],[800,.6]];
+  for(var i=0;i<steps.length;i++){
+    var sc=Math.min(1,steps[i][0]/bmp.width),c=document.createElement('canvas');c.width=Math.round(bmp.width*sc);c.height=Math.round(bmp.height*sc);c.getContext('2d').drawImage(bmp,0,0,c.width,c.height);
+    var b=await new Promise(function(r){c.toBlob(r,'image/jpeg',steps[i][1])});url=await blobToDataURL(b);if(url.length<=900000)return url;
+  }
+  return null;
+}
+async function syncImages(u){
+  state.settings.imgUp=state.settings.imgUp||{};
+  var ids=[],changed=false;state.trades.forEach(function(t){(t.shots||[]).forEach(function(id){ids.push(id)})});
+  for(var i=0;i<ids.length;i++){
+    var id=ids[i];if(state.settings.imgUp[id])continue;
+    var b=await dbGet('img',id);if(!b)continue;
+    var data=await cloudImageData(b);if(!data){console.warn('Screenshot too large for the cloud copy:',id);continue}
+    await window.cloudPutImage(u.uid,id,data);state.settings.imgUp[id]=1;changed=true;
+  }
+  if(changed)await dbPut('kv','state',JSON.parse(JSON.stringify(state)));
+}
+async function syncNow(){
+  var u=window.auth&&window.auth.currentUser;
+  if(!u||!window.cloudLoad||!state)return;
+  if(syncBusy){syncAgain=true;return}
+  syncBusy=true;setCloud('Cloud: syncing…');
+  try{
+    if(!state.settings.legacyDone&&window.cloudLoadLegacy){
+      var olds=await window.cloudLoadLegacy(u.uid);
+      olds.forEach(function(o){var lm=mergeRemote(state,o);state.trades=lm.trades;state.cash=lm.cash;state.lists=lm.lists;state.purged=lm.purged});
+      state.settings.legacyDone=!olds.failed;await dbPut('kv','state',JSON.parse(JSON.stringify(state)));if(olds.length&&view.name!=='form')render();
+    }
+    var remote=await window.cloudLoad(u.uid),m=mergeRemote(state,remote);
+    var mine=canon(normBody({trades:state.trades,cash:state.cash,lists:state.lists,purged:state.purged})),merged=canon(normBody(m));
+    if(mine!==merged){state.trades=m.trades;state.cash=m.cash;state.lists=m.lists;state.purged=m.purged;await dbPut('kv','state',JSON.parse(JSON.stringify(state)));if(view.name!=='form')render()}
+    if(!remote||canon(normBody(remote))!==merged){
+      var payload=JSON.parse(JSON.stringify({trades:m.trades,cash:m.cash,lists:m.lists,purged:m.purged,updatedAt:new Date().toISOString()}));
+      if(JSON.stringify(payload).length>900000){setCloud('Cloud: journal too large to sync');toast('The cloud copy is nearly full. Ask Claude to switch it to per-trade storage.')}
+      else{await window.cloudPut(u.uid,payload);setCloud('Cloud: synced '+new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}))}
+    }else setCloud('Cloud: synced '+new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}));
+    try{await syncImages(u);hydrate()}catch(e){console.error('Screenshot sync failed:',e);setCloud('Cloud: trades synced, screenshots pending')}
+  }catch(e){console.error('Cloud sync failed (saved on this device):',e);setCloud('Cloud: sync failed, saved on this device')}
+  syncBusy=false;if(syncAgain){syncAgain=false;syncNow()}
+}
+document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible')syncNow()});
+window.addEventListener('online',function(){syncNow()});
+
 /* boot */
 function boot(){
   openDB().then(function(d){idb=d}).catch(function(){storageOK=false}).then(function(){return dbGet('kv','state')}).then(function(s){
     state=s?Object.assign(defaultState(),s):defaultState();
     state.lists=Object.assign({setups:DEF_SETUPS.slice(),tags:DEF_TAGS.slice(),emotions:EMOTIONS.slice()},state.lists||{});
     var today=nyNow().date;
-    state.trades=state.trades.filter(function(t){if(t.deletedAt&&daysBetween(t.deletedAt,today)>30){t.shots.forEach(function(id){dbDel('img',id)});return false}return true});
+    state.purged=state.purged||{};
+    state.trades=state.trades.filter(function(t){if(t.deletedAt&&daysBetween(t.deletedAt,today)>30){t.shots.forEach(function(id){delImg(id)});state.purged[t.id]=Date.now();return false}return true});
     if(!storageOK)toast("This browser blocked storage. Your entries won't be kept after you close the page.");
     render();
+    if(window.syncNow)syncNow();
   });
   function blobDownloads(){return{save:function(o){return new Promise(function(res,rej){try{var b=new Blob([o.data],{type:/\.csv$/.test(o.filename)?'text/csv;charset=utf-8':'application/json'}),u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download=o.filename;document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(u)},4000);res()}catch(e){rej(e)}})}}}
   if(window.claude&&claude.use){claude.use('downloads').then(function(d){downloads=d;if(view&&view.name==='account')render()}).catch(function(){})}
@@ -679,7 +756,7 @@ if(typeof document!=='undefined'&&document.getElementById('root'))boot();
 <!-- Firebase SDKs -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-    import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+    import { getFirestore, doc, setDoc, getDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
     import { getAuth, signInWithEmailAndPassword, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
     const firebaseConfig = {
@@ -701,8 +778,10 @@ if(typeof document!=='undefined'&&document.getElementById('root'))boot();
       if (user) {
         console.log("Authenticated as:", user.email);
         overlay.style.display = "none";
+        if (window.syncNow) window.syncNow();
       } else {
         overlay.style.display = "flex";
+        if (window.setCloud) window.setCloud("Cloud: signed out");
       }
     });
 
@@ -721,138 +800,65 @@ if(typeof document!=='undefined'&&document.getElementById('root'))boot();
       }
     };
 
-    // Protected Backup Function (Updated path to user-scoped doc)
+    // Cloud sync (each account keeps its own copy at users/{uid})
     window.cloudSyncState = async function(journalState) {
       if (!window.auth.currentUser) return;
+      if (window.syncNow) await window.syncNow();
+    };
+
+    window.cloudLoad = async function(uid) {
+      const snap = await getDoc(doc(window.db, "users", uid));
+      return snap.exists() ? snap.data() : null;
+    };
+
+    window.cloudPut = async function(uid, payload) {
+      await setDoc(doc(window.db, "users", uid), payload);
+    };
+
+    // Screenshots: one small document each at users/{uid}/images/{id}
+    window.cloudPutImage = async function(uid, id, dataUrl) {
+      await setDoc(doc(window.db, "users", uid, "images", id), { data: dataUrl, createdAt: new Date() });
+    };
+
+    window.cloudGetImage = async function(uid, id) {
+      const snap = await getDoc(doc(window.db, "users", uid, "images", id));
+      return snap.exists() ? snap.data().data : null;
+    };
+
+    window.cloudDelImage = async function(uid, id) {
+      await deleteDoc(doc(window.db, "users", uid, "images", id));
+    };
+
+    // One-time read of older cloud copies so nothing saved earlier is lost
+    window.cloudLoadLegacy = async function(uid) {
+      const found = [];
       try {
-        await CloudSync.saveJournalData(journalState);
-        console.log("Cloud backup synced!");
-      } catch (err) {
-        console.error("Sync blocked or failed:", err);
-      }
+        const a = await getDoc(doc(window.db, "users", uid, "data", "journal"));
+        if (a.exists()) found.push(a.data());
+      } catch (err) { console.warn("Older copy (users/data/journal) not readable:", err); found.failed = true; }
+      try {
+        const b = await getDoc(doc(window.db, "backups", "journal_state"));
+        if (b.exists() && b.data().data) found.push(b.data().data);
+      } catch (err) { console.warn("Older copy (backups/journal_state) not readable:", err); found.failed = true; }
+      return found;
     };
 
     // Protected Restore Function
     window.cloudRestoreState = async function() {
       if (!window.auth.currentUser) return null;
       try {
-        const uid = window.auth.currentUser.uid;
-        const docRef = doc(window.db, "users", uid, "data", "journal");
+        const docRef = doc(window.db, "backups", "journal_state");
         const docSnap = await getDoc(docRef);
-        return docSnap.exists() ? docSnap.data() : null;
+        return docSnap.exists() ? docSnap.data().data : null;
       } catch (err) {
         console.error("Restore blocked or failed:", err);
         return null;
       }
     };
-
-    // ==========================================
-    // FIRESTORE SEPARATE IMAGE SYNC MODULE
-    // ==========================================
-    window.CloudSync = {
-      // 1. Save central journal metadata (stripping embedded heavy image data)
-      async saveJournalData(journalData) {
-        const user = window.auth.currentUser;
-        if (!user) return;
-
-        const sanitizedTrades = (journalData.trades || []).map(trade => {
-          const cleanTrade = { ...trade };
-          if (cleanTrade.images && Array.isArray(cleanTrade.images)) {
-            // Keep reference IDs, remove base64 payloads from main journal doc
-            cleanTrade.imageIds = cleanTrade.images.map(img => (typeof img === 'string' ? img : img.id));
-            delete cleanTrade.images;
-          }
-          return cleanTrade;
-        });
-
-        const docRef = doc(window.db, "users", user.uid, "data", "journal");
-        await setDoc(docRef, {
-          ...journalData,
-          trades: sanitizedTrades,
-          updatedAt: new Date()
-        }, { merge: true });
-      },
-
-      // 2. Upload individual screenshot to users/{uid}/images/{imageId}
-      async uploadImage(imageId, tradeId, base64Data) {
-        const user = window.auth.currentUser;
-        if (!user) return;
-
-        const imgDocRef = doc(window.db, "users", user.uid, "images", imageId);
-        await setDoc(imgDocRef, {
-          id: imageId,
-          tradeId: tradeId,
-          data: base64Data, // Compressed 1600px JPEG string
-          createdAt: new Date()
-        });
-      },
-
-      // 3. Download single screenshot when opened on a new device
-      async fetchImageFromCloud(imageId) {
-        const user = window.auth.currentUser;
-        if (!user) return null;
-
-        try {
-          const imgDocRef = doc(window.db, "users", user.uid, "images", imageId);
-          const snap = await getDoc(imgDocRef);
-          if (snap.exists()) {
-            return snap.data().data;
-          }
-        } catch (err) {
-          console.error(`Error fetching cloud image ${imageId}:`, err);
-        }
-        return null;
-      },
-
-      // 4. Clean up screenshot document on deletion
-      async deleteCloudImage(imageId) {
-        const user = window.auth.currentUser;
-        if (!user) return;
-
-        try {
-          const imgDocRef = doc(window.db, "users", user.uid, "images", imageId);
-          await deleteDoc(imgDocRef);
-        } catch (err) {
-          console.error(`Error deleting cloud image ${imageId}:`, err);
-        }
-      }
-    };
-
-    // ==========================================
-    // LOCAL-FIRST LAZY LOADING HELPERS
-    // ==========================================
-
-    window.getOrFetchImage = async function(imageId) {
-      // 1. Try local IndexedDB store first
-      let localImg = await dbStore.get('img', imageId);
-      if (localImg && localImg.data) {
-        return localImg.data;
-      }
-
-      // 2. Fallback to Firestore & cache locally
-      const cloudData = await CloudSync.fetchImageFromCloud(imageId);
-      if (cloudData) {
-        await dbStore.put('img', { id: imageId, data: cloudData, cachedAt: Date.now() });
-        return cloudData;
-      }
-
-      return null;
-    };
-
-    window.renderTradeScreenshot = async function(imageId, containerElem) {
-      const imgElem = document.createElement('img');
-      imgElem.className = 'trade-screenshot-img loading';
-      imgElem.alt = 'Trade Screenshot';
-      containerElem.appendChild(imgElem);
-
-      const base64Data = await getOrFetchImage(imageId);
-      if (base64Data) {
-        imgElem.src = base64Data;
-        imgElem.classList.remove('loading');
-      } else {
-        imgElem.alt = 'Image unavailable';
-      }
-    };
   </script>
+</script>
+</script>
+</body>
+</html>  
 </body>
 </html>

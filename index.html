@@ -34,7 +34,7 @@ main{padding:28px 32px 90px;max-width:1140px;width:100%}
 .btn.link{border:0;background:none;color:var(--accent);padding:4px 2px}
 .btn.danger{color:var(--loss)}
 .btn:disabled{opacity:.5;cursor:default}
-.icon{border:0;background:none;color:var(--muted);padding:6px;border-radius:6px;cursor:pointer;line-height:0}
+.icon{border:0;background:none;color:var(--muted);padding:4px;border-radius:6px;cursor:pointer;line-height:0}
 .icon:hover{background:var(--hover);color:var(--ink)}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;margin-bottom:20px}
@@ -56,8 +56,8 @@ main{padding:28px 32px 90px;max-width:1140px;width:100%}
 .pill.win{background:var(--winbg)}.pill.loss{background:var(--lossbg)}.pill.open,.pill.warn{background:var(--warnbg);color:var(--warn)}.pill.even{background:var(--hover);color:var(--ink2)}
 .tablewrap{overflow-x:auto}
 table.tbl{width:100%;border-collapse:collapse;font-size:14px}
-.tbl th{font-weight:500;color:var(--ink2);text-align:left;padding:10px 9px;border-bottom:1px solid var(--line);font-size:12.5px;white-space:nowrap}
-.tbl td{padding:12px 9px;border-bottom:1px solid var(--line);white-space:nowrap}
+.tbl th{font-weight:500;color:var(--ink2);text-align:left;padding:10px 7px;border-bottom:1px solid var(--line);font-size:12.5px;white-space:nowrap}
+.tbl td{padding:12px 7px;border-bottom:1px solid var(--line);white-space:nowrap}
 .tbl tr:last-child td{border-bottom:0}
 .tbl tr[data-open]{cursor:pointer}
 .tbl tr[data-open]:hover td{background:var(--hover)}
@@ -169,7 +169,7 @@ var BREAKERS=['Moved stop','No setup','Revenge trade'];
 var DEF_SETUPS=['Reversal','Breakout','Pullback','Trend continuation','Range'];
 var DEF_TAGS=['Moved stop','Chased entry','Exited early','Oversized','No setup','Revenge trade'];
 var DIRS={option:[['short put','Short put'],['long put','Long put'],['long call','Long call'],['short call','Short call']],stock:[['long','Long'],['short','Short']]};
-var ICON={edit:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></svg>',trash:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>'};
+var ICON={view:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>',edit:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></svg>',trash:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>'};
 
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
 function uid(){return Math.random().toString(36).slice(2,9)+Date.now().toString(36).slice(-3)}
@@ -294,7 +294,7 @@ VIEWS.dashboard=function(){
     h+='<div class="panel tablewrap"><table class="tbl"><thead><tr><th>Date</th><th>Symbol</th><th>Result</th><th>Type</th><th class="n">Stock in</th><th class="n">Stop</th><th class="n">Stock out</th><th>Plan</th><th>Tags</th><th class="n">Return</th><th></th></tr></thead><tbody>';
     shown.forEach(function(x){var t=x.t,c=x.c,pl=!c.closed?'<span class="mut">—</span>':t.followed===true?'<span class="win">Yes</span>':t.followed===false?'<span class="loss">No</span>':'<span class="mut">Not set</span>';
       var tags=(t.tags||[]).slice(0,2).map(function(g){return'<span class="chip static">'+esc(g)+'</span>'}).join(' ')+((t.tags||[]).length>2?' <span class="mut">+'+(t.tags.length-2)+'</span>':'');
-      h+='<tr data-open="'+t.id+'" tabindex="0"><td>'+fmtDate(c.closed?c.closeDate:c.openDate)+'</td><td class="sym">'+esc(t.symbol)+'</td><td><span class="pill '+c.result+'">'+({win:'Win',loss:'Loss',even:'Even',open:'Open'})[c.result]+'</span></td><td>'+esc(typeLabel(t))+'</td><td class="n">'+num(t.stockIn)+'</td><td class="n">'+num(t.stop)+'</td><td class="n">'+(+t.stockOut>0?num(t.stockOut):'—')+'</td><td>'+pl+'</td><td>'+tags+'</td><td class="n '+(c.result==='win'?'win':c.result==='loss'?'loss':'mut')+'">'+(c.closed?sMoney(c.net)+' <span class="mut">'+(c.pct!=null?(c.pct>0?'+':'')+c.pct.toFixed(2)+'%':'')+'</span>':'—')+'</td><td style="text-align:right"><button class="icon" data-act="edit" data-id="'+t.id+'" aria-label="Edit trade">'+ICON.edit+'</button><button class="icon" data-act="del" data-id="'+t.id+'" aria-label="Delete trade">'+ICON.trash+'</button></td></tr>'});
+      h+='<tr data-open="'+t.id+'" tabindex="0"><td>'+fmtDate(c.closed?c.closeDate:c.openDate)+'</td><td class="sym">'+esc(t.symbol)+'</td><td><span class="pill '+c.result+'">'+({win:'Win',loss:'Loss',even:'Even',open:'Open'})[c.result]+'</span></td><td>'+esc(typeLabel(t))+'</td><td class="n">'+num(t.stockIn)+'</td><td class="n">'+num(t.stop)+'</td><td class="n">'+(+t.stockOut>0?num(t.stockOut):'—')+'</td><td>'+pl+'</td><td>'+tags+'</td><td class="n '+(c.result==='win'?'win':c.result==='loss'?'loss':'mut')+'">'+(c.closed?sMoney(c.net)+' <span class="mut">'+(c.pct!=null?(c.pct>0?'+':'')+c.pct.toFixed(2)+'%':'')+'</span>':'—')+'</td><td style="text-align:right"><button class="icon" data-act="view" data-id="'+t.id+'" aria-label="View trade" title="View">'+ICON.view+'</button><button class="icon" data-act="edit" data-id="'+t.id+'" aria-label="Edit trade">'+ICON.edit+'</button><button class="icon" data-act="del" data-id="'+t.id+'" aria-label="Delete trade">'+ICON.trash+'</button></td></tr>'});
     h+='</tbody></table></div>';
   }
   var del=state.trades.filter(function(t){return t.deletedAt}).length;
@@ -548,6 +548,7 @@ var ACT={
   calday:function(b){cal.sel=b.dataset.d;render()},
   period:function(b){state.period=b.dataset.v;save();render()},
   review:function(){var r=needsReview();if(r.length)go('detail',{id:r[0].t.id})},
+  view:function(b){go('detail',{id:b.dataset.id,from:view.name})},
   edit:function(b){startEdit(b.dataset.id)},addexit:function(b){startEdit(b.dataset.id,true)},
   del:function(b){softDelete(b.dataset.id)},deleted:function(){go('deleted')},
   restore:function(b){var t=state.trades.find(function(x){return x.id===b.dataset.id});t.deletedAt=null;save();render();toast('Restored '+t.symbol)},

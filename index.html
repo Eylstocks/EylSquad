@@ -622,6 +622,24 @@ function boot(){
   else{downloads=blobDownloads()}
 }
 if(typeof document!=='undefined'&&document.getElementById('root'))boot();
+
+  // Import the functions you need from the SDKs you need
+import { initializeApp } from "firebase/app";
+// TODO: Add SDKs for Firebase products that you want to use
+// https://firebase.google.com/docs/web/setup#available-libraries
+
+// Your web app's Firebase configuration
+const firebaseConfig = {
+  apiKey: "AIzaSyAEA8gPF-VjvMBRi2mrY6DoXSHUIQPGbBE",
+  authDomain: "trade-journal-9638b.firebaseapp.com",
+  projectId: "trade-journal-9638b",
+  storageBucket: "trade-journal-9638b.firebasestorage.app",
+  messagingSenderId: "632354998566",
+  appId: "1:632354998566:web:eed18acaca218cbdba99e7"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
 </script>
 </body>
 </html>

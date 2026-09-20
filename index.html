@@ -159,11 +159,18 @@ main{padding:18px 14px 80px}
   
 /* Login Overlay Styles */
 #login-overlay {
-  position: fixed;
-  top: 0; left: 0; width: 100vw; height: 100vh;
-  background: rgba(15, 23, 42, 0.95);
-  display: flex; align-items: center; justify-content: center;
-  z-index: 9999;
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  background: rgba(15, 23, 42, 0.95) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  z-index: 99999 !important;
 }
 .login-card {
   background: #1e293b; color: #f8fafc; padding: 2rem;
@@ -181,8 +188,7 @@ main{padding:18px 14px 80px}
   border-radius: 6px; font-weight: bold; cursor: pointer;
 }
 .login-card button:hover { background: #1d4ed8; }
-</style>
-</head>
+
 </style>
 </head>
 <body>

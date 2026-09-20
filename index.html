@@ -146,18 +146,7 @@ main{padding:18px 14px 80px}
 .cal{grid-template-columns:repeat(7,minmax(0,1fr)) 58px;gap:3px}.day{min-height:58px;padding:3px;font-size:10.5px;overflow:hidden}.day b{font-size:12px}.wk{padding:4px;font-size:10.5px;overflow:hidden}.day small{display:none}.brow{grid-template-columns:84px minmax(0,1fr) 70px 32px}
 }
 
-  <!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Trade journal</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
-<style>
-  
-/* Login Overlay Styles */
+/* Login overlay */
 #login-overlay {
   position: fixed !important;
   top: 0 !important;
@@ -167,7 +156,7 @@ main{padding:18px 14px 80px}
   width: 100vw !important;
   height: 100vh !important;
   background: rgba(15, 23, 42, 0.95) !important;
-  display: flex !important;
+  display: flex;
   align-items: center !important;
   justify-content: center !important;
   z-index: 99999 !important;
@@ -188,11 +177,9 @@ main{padding:18px 14px 80px}
   border-radius: 6px; font-weight: bold; cursor: pointer;
 }
 .login-card button:hover { background: #1d4ed8; }
-
 </style>
 </head>
 <body>
-  <!-- Login Popup Overlay -->
   <div id="login-overlay" style="display: none;">
     <div class="login-card">
       <h3 style="margin: 0; text-align: center;">Trade Journal Access</h3>
@@ -202,8 +189,6 @@ main{padding:18px 14px 80px}
       <div id="auth-error" style="color: #ef4444; font-size: 0.85rem; text-align: center;"></div>
     </div>
   </div>
-
-  <!-- Your existing app HTML structure continues here... -->
 <div class="app" id="root">
   <nav class="side" aria-label="Main">
     <div class="brand">Trade journal</div>
@@ -691,78 +676,78 @@ function boot(){
 }
 if(typeof document!=='undefined'&&document.getElementById('root'))boot();
 </script>
-<!-- Firebase SDKs & Auth Logic -->
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-  import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-  import { getAuth, signInWithEmailAndPassword, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+<!-- Firebase SDKs -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+    import { getAuth, signInWithEmailAndPassword, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
-  const firebaseConfig = {
-    apiKey: "AIzaSyAEA8gPF-VjvMBRi2mrY6DoXSHUIQPGbBE",
-    authDomain: "trade-journal-9638b.firebaseapp.com",
-    projectId: "trade-journal-9638b",
-    storageBucket: "trade-journal-9638b.firebasestorage.app",
-    messagingSenderId: "632354998566",
-    appId: "1:632354998566:web:eed18acaca218cbdba99e7"
-  };
+    const firebaseConfig = {
+      apiKey: "AIzaSyAEA8gPF-VjvMBRi2mrY6DoXSHUIQPGbBE",
+      authDomain: "trade-journal-9638b.firebaseapp.com",
+      projectId: "trade-journal-9638b",
+      storageBucket: "trade-journal-9638b.firebasestorage.app",
+      messagingSenderId: "632354998566",
+      appId: "1:632354998566:web:eed18acaca218cbdba99e7"
+    };
 
-  const app = initializeApp(firebaseConfig);
-  window.db = getFirestore(app);
-  window.auth = getAuth(app);
+    const app = initializeApp(firebaseConfig);
+    window.db = getFirestore(app);
+    window.auth = getAuth(app);
 
-  // Monitor Authentication State
-  onAuthStateChanged(window.auth, (user) => {
-    const overlay = document.getElementById("login-overlay");
-    if (user) {
-      console.log("Authenticated as:", user.email);
-      overlay.style.display = "none";
-    } else {
-      overlay.style.display = "flex";
-    }
-  });
+    // Auth State Monitor
+    onAuthStateChanged(window.auth, (user) => {
+      const overlay = document.getElementById("login-overlay");
+      if (user) {
+        console.log("Authenticated as:", user.email);
+        overlay.style.display = "none";
+      } else {
+        overlay.style.display = "flex";
+      }
+    });
 
-  // Login Handler
-  window.handleLogin = async function() {
-    const email = document.getElementById("auth-email").value;
-    const password = document.getElementById("auth-password").value;
-    const errDiv = document.getElementById("auth-error");
-    errDiv.textContent = "";
+    // Login Action
+    window.handleLogin = async function() {
+      const email = document.getElementById("auth-email").value;
+      const password = document.getElementById("auth-password").value;
+      const errDiv = document.getElementById("auth-error");
+      errDiv.textContent = "";
 
-    try {
-      await signInWithEmailAndPassword(window.auth, email, password);
-    } catch (err) {
-      errDiv.textContent = "Invalid login credentials.";
-      console.error(err);
-    }
-  };
+      try {
+        await signInWithEmailAndPassword(window.auth, email, password);
+      } catch (err) {
+        errDiv.textContent = "Invalid login credentials.";
+        console.error(err);
+      }
+    };
 
-  // Protected Auto-Sync Function
-  window.cloudSyncState = async function(journalState) {
-    if (!window.auth.currentUser) return;
-    try {
-      await setDoc(doc(window.db, "backups", "journal_state"), {
-        data: journalState,
-        lastUpdated: new Date()
-      });
-      console.log("Cloud backup synced to Firestore!");
-    } catch (err) {
-      console.error("Cloud sync failed:", err);
-    }
-  };
+    // Protected Backup Function
+    window.cloudSyncState = async function(journalState) {
+      if (!window.auth.currentUser) return;
+      try {
+        await setDoc(doc(window.db, "backups", "journal_state"), {
+          data: journalState,
+          lastUpdated: new Date()
+        });
+        console.log("Cloud backup synced!");
+      } catch (err) {
+        console.error("Sync blocked or failed:", err);
+      }
+    };
 
-  // Protected Restore Function
-  window.cloudRestoreState = async function() {
-    if (!window.auth.currentUser) return null;
-    try {
-      const docRef = doc(window.db, "backups", "journal_state");
-      const docSnap = await getDoc(docRef);
-      return docSnap.exists() ? docSnap.data().data : null;
-    } catch (err) {
-      console.error("Cloud restore failed:", err);
-      return null;
-    }
-  };
-
+    // Protected Restore Function
+    window.cloudRestoreState = async function() {
+      if (!window.auth.currentUser) return null;
+      try {
+        const docRef = doc(window.db, "backups", "journal_state");
+        const docSnap = await getDoc(docRef);
+        return docSnap.exists() ? docSnap.data().data : null;
+      } catch (err) {
+        console.error("Restore blocked or failed:", err);
+        return null;
+      }
+    };
+  </script>
 </script>
 </script>
 </body>

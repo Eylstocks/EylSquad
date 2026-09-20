@@ -622,31 +622,6 @@ function boot(){
   else{downloads=blobDownloads()}
 }
 if(typeof document!=='undefined'&&document.getElementById('root'))boot();
-
-<!-- Make sure 'type="module"' is included in the script tag! -->
-<script type="module">
-  // Load Firebase directly via web URLs (CDNs)
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-  import { getFirestore } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-  import { getStorage } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-storage.js";
-
-  // Your exact Firebase config
-  const firebaseConfig = {
-    apiKey: "AIzaSyAEA8gPF-VjvMBRi2mrY6DoXSHUIQPGbBE",
-    authDomain: "trade-journal-9638b.firebaseapp.com",
-    projectId: "trade-journal-9638b",
-    storageBucket: "trade-journal-9638b.firebasestorage.app",
-    messagingSenderId: "632354998566",
-    appId: "1:632354998566:web:eed18acaca218cbdba99e7"
-  };
-
-  // Initialize Firebase, Database, and Storage
-  const app = initializeApp(firebaseConfig);
-  const db = getFirestore(app);
-  const storage = getStorage(app);
-
-  console.log("Firebase connected successfully!");
-</script>
 </script>
 </body>
 </html>

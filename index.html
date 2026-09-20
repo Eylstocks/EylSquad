@@ -721,14 +721,11 @@ if(typeof document!=='undefined'&&document.getElementById('root'))boot();
       }
     };
 
-    // Protected Backup Function
+    // Protected Backup Function (Updated path to user-scoped doc)
     window.cloudSyncState = async function(journalState) {
       if (!window.auth.currentUser) return;
       try {
-        await setDoc(doc(window.db, "backups", "journal_state"), {
-          data: journalState,
-          lastUpdated: new Date()
-        });
+        await CloudSync.saveJournalData(journalState);
         console.log("Cloud backup synced!");
       } catch (err) {
         console.error("Sync blocked or failed:", err);
@@ -739,18 +736,123 @@ if(typeof document!=='undefined'&&document.getElementById('root'))boot();
     window.cloudRestoreState = async function() {
       if (!window.auth.currentUser) return null;
       try {
-        const docRef = doc(window.db, "backups", "journal_state");
+        const uid = window.auth.currentUser.uid;
+        const docRef = doc(window.db, "users", uid, "data", "journal");
         const docSnap = await getDoc(docRef);
-        return docSnap.exists() ? docSnap.data().data : null;
+        return docSnap.exists() ? docSnap.data() : null;
       } catch (err) {
         console.error("Restore blocked or failed:", err);
         return null;
       }
     };
+
+    // ==========================================
+    // FIRESTORE SEPARATE IMAGE SYNC MODULE
+    // ==========================================
+    window.CloudSync = {
+      // 1. Save central journal metadata (stripping embedded heavy image data)
+      async saveJournalData(journalData) {
+        const user = window.auth.currentUser;
+        if (!user) return;
+
+        const sanitizedTrades = (journalData.trades || []).map(trade => {
+          const cleanTrade = { ...trade };
+          if (cleanTrade.images && Array.isArray(cleanTrade.images)) {
+            // Keep reference IDs, remove base64 payloads from main journal doc
+            cleanTrade.imageIds = cleanTrade.images.map(img => (typeof img === 'string' ? img : img.id));
+            delete cleanTrade.images;
+          }
+          return cleanTrade;
+        });
+
+        const docRef = doc(window.db, "users", user.uid, "data", "journal");
+        await setDoc(docRef, {
+          ...journalData,
+          trades: sanitizedTrades,
+          updatedAt: new Date()
+        }, { merge: true });
+      },
+
+      // 2. Upload individual screenshot to users/{uid}/images/{imageId}
+      async uploadImage(imageId, tradeId, base64Data) {
+        const user = window.auth.currentUser;
+        if (!user) return;
+
+        const imgDocRef = doc(window.db, "users", user.uid, "images", imageId);
+        await setDoc(imgDocRef, {
+          id: imageId,
+          tradeId: tradeId,
+          data: base64Data, // Compressed 1600px JPEG string
+          createdAt: new Date()
+        });
+      },
+
+      // 3. Download single screenshot when opened on a new device
+      async fetchImageFromCloud(imageId) {
+        const user = window.auth.currentUser;
+        if (!user) return null;
+
+        try {
+          const imgDocRef = doc(window.db, "users", user.uid, "images", imageId);
+          const snap = await getDoc(imgDocRef);
+          if (snap.exists()) {
+            return snap.data().data;
+          }
+        } catch (err) {
+          console.error(`Error fetching cloud image ${imageId}:`, err);
+        }
+        return null;
+      },
+
+      // 4. Clean up screenshot document on deletion
+      async deleteCloudImage(imageId) {
+        const user = window.auth.currentUser;
+        if (!user) return;
+
+        try {
+          const imgDocRef = doc(window.db, "users", user.uid, "images", imageId);
+          await deleteDoc(imgDocRef);
+        } catch (err) {
+          console.error(`Error deleting cloud image ${imageId}:`, err);
+        }
+      }
+    };
+
+    // ==========================================
+    // LOCAL-FIRST LAZY LOADING HELPERS
+    // ==========================================
+
+    window.getOrFetchImage = async function(imageId) {
+      // 1. Try local IndexedDB store first
+      let localImg = await dbStore.get('img', imageId);
+      if (localImg && localImg.data) {
+        return localImg.data;
+      }
+
+      // 2. Fallback to Firestore & cache locally
+      const cloudData = await CloudSync.fetchImageFromCloud(imageId);
+      if (cloudData) {
+        await dbStore.put('img', { id: imageId, data: cloudData, cachedAt: Date.now() });
+        return cloudData;
+      }
+
+      return null;
+    };
+
+    window.renderTradeScreenshot = async function(imageId, containerElem) {
+      const imgElem = document.createElement('img');
+      imgElem.className = 'trade-screenshot-img loading';
+      imgElem.alt = 'Trade Screenshot';
+      containerElem.appendChild(imgElem);
+
+      const base64Data = await getOrFetchImage(imageId);
+      if (base64Data) {
+        imgElem.src = base64Data;
+        imgElem.classList.remove('loading');
+      } else {
+        imgElem.alt = 'Image unavailable';
+      }
+    };
   </script>
-</script>
-</script>
-</body>
-</html>  
 </body>
 </html>

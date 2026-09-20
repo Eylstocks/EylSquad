@@ -229,7 +229,18 @@ function dbDel(s,k){if(!storageOK){delete mem[s][k];return Promise.resolve()}ret
 function dbKeys(s){return storageOK?tx(s,'readonly',function(o){return o.getAllKeys()}):Promise.resolve(Object.keys(mem[s]))}
 function dbClear(s){if(!storageOK){mem[s]={};return Promise.resolve()}return tx(s,'readwrite',function(o){return o.clear()})}
 function defaultState(){return{v:1,trades:[],cash:[],settings:{fee:0.65,lastSetup:'',lastBackup:''},lists:{setups:DEF_SETUPS.slice(),tags:DEF_TAGS.slice(),emotions:EMOTIONS.slice()},period:'all',curve:'pnl'}}
-function save(){clearTimeout(saveT);saveT=setTimeout(function(){dbPut('kv','state',JSON.parse(JSON.stringify(state))).catch(function(){toast("Couldn't save to this browser. Back up your journal.")})},120)}
+function save(){
+  clearTimeout(saveT);
+  saveT=setTimeout(function(){
+    var cleanState = JSON.parse(JSON.stringify(state));
+    dbPut('kv','state',cleanState).catch(function(){
+      toast("Couldn't save to this browser. Back up your journal.");
+    });
+    if(typeof window.cloudSyncState === 'function'){
+      window.cloudSyncState(cleanState);
+    }
+  },120);
+}
 document.addEventListener('visibilitychange',function(){if(document.visibilityState==='hidden'&&state&&saveT){clearTimeout(saveT);saveT=null;dbPut('kv','state',JSON.parse(JSON.stringify(state))).catch(function(){})}});
 function imgURL(id){if(urlCache[id])return Promise.resolve(urlCache[id]);return dbGet('img',id).then(function(b){if(!b)return null;return urlCache[id]=URL.createObjectURL(b)})}
 function compress(file){return createImageBitmap(file).then(function(b){var sc=Math.min(1,1600/b.width),c=document.createElement('canvas');c.width=Math.round(b.width*sc);c.height=Math.round(b.height*sc);c.getContext('2d').drawImage(b,0,0,c.width,c.height);return new Promise(function(r){c.toBlob(r,'image/jpeg',0.82)})})}
@@ -623,10 +634,10 @@ function boot(){
 }
 if(typeof document!=='undefined'&&document.getElementById('root'))boot();
 </script>
-  <!-- Firebase SDKs -->
+ <!-- Firebase SDKs -->
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-  import { getFirestore } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+  import { getFirestore, doc, setDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
   import { getStorage } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-storage.js";
 
   const firebaseConfig = {
@@ -642,7 +653,21 @@ if(typeof document!=='undefined'&&document.getElementById('root'))boot();
   window.db = getFirestore(app);
   window.storage = getStorage(app);
 
+  // Automatic Cloud Backup Hook
+  window.cloudSyncState = async function(journalState) {
+    try {
+      await setDoc(doc(window.db, "backups", "journal_state"), {
+        data: journalState,
+        lastUpdated: new Date()
+      });
+      console.log("Cloud backup synced to Firestore!");
+    } catch (err) {
+      console.error("Cloud sync error:", err);
+    }
+  };
+
   console.log("Firebase initialized successfully!");
+</script>
 </script>
 </body>
 </html>  

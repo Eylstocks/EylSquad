@@ -332,6 +332,8 @@ function tstats(list){
   return{n:asc.length,wins:w.length,losses:l.length,net:net,avgWin:w.length?sw/w.length:null,avgLoss:l.length?sl/l.length:null,pf:sl>0?sw/sl:null,exp:asc.length?net/asc.length:null,dd:dd,winRate:asc.length?w.length/asc.length:null};
 }
 function pnlRows(list){var asc=ascClosed(list),rows=[],cum=0;if(!asc.length)return rows;rows.push({date:asc[0].c.closeDate,balance:0});asc.forEach(function(x){cum+=x.c.net;rows.push({date:x.c.closeDate,balance:cum})});return rows}
+var closedNotices={};
+function dismissBtn(k){return'<button class="icon" data-act="dismiss" data-k="'+k+'" aria-label="Dismiss this notice" title="Dismiss" style="color:inherit;font-size:20px;line-height:1;padding:0 8px">×</button>'}
 function periodBar(){return'<div class="seg" role="group" aria-label="Period">'+['30D','90D','180D','all'].map(function(p){return'<button class="chip'+(state.period===p?' on':'')+'" data-act="period" data-v="'+p+'">'+(p==='all'?'All':p)+'</button>'}).join('')+'</div>'}
 VIEWS={};
 VIEWS.dashboard=function(){
@@ -341,8 +343,8 @@ VIEWS.dashboard=function(){
   var allPnl=led.filter(function(r){return r.kind==='trade'}).reduce(function(a,r){return a+r.amount},0),ret=dep>0?allPnl/dep*100:null;
   var review=needsReview(),stale=state.trades.length&&(!state.settings.lastBackup||daysBetween(state.settings.lastBackup,nyNow().date)>14),mode=state.curve==='balance'?'balance':'pnl';
   var h='<div class="top"><div><h1>Dashboard</h1><p class="sub">'+open.length+' open '+(open.length===1?'trade':'trades')+(review.length?' · <button class="btn link" data-act="review">'+review.length+(review.length===1?' trade needs':' trades need')+' a review</button>':'')+'</p></div><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">'+periodBar()+'<button class="btn primary" data-go="form">New trade</button></div></div>';
-  if(stale)h+='<div class="callout"><span>Your journal lives in this browser only. Back it up so a cleared browser can\'t erase it.</span><button class="btn sm" data-go="account">Back up now</button></div>';
-  if(!state.cash.length)h+='<div class="callout"><span>Add your starting deposit so balance and returns are tracked from day one.</span><button class="btn sm" data-go="account">Add deposit</button></div>';
+  if(stale&&!closedNotices.backup)h+='<div class="callout"><span>Your journal lives in this browser only. Back it up so a cleared browser can\'t erase it.</span><span style="display:flex;gap:6px;align-items:center"><button class="btn sm" data-go="account">Back up now</button>'+dismissBtn('backup')+'</span></div>';
+  if(!state.cash.length&&!closedNotices.deposit)h+='<div class="callout"><span>Add your starting deposit so balance and returns are tracked from day one.</span><span style="display:flex;gap:6px;align-items:center"><button class="btn sm" data-go="account">Add deposit</button>'+dismissBtn('deposit')+'</span></div>';
   h+='<p class="grp">Account</p><div class="panel acct"><div><p class="k">Balance</p><p class="big2">'+money(bal)+'</p></div><div><p class="k">Net deposited</p><p class="big2">'+money(dep)+'</p></div><div><p class="k">Return on deposits</p><p class="big2 '+(ret==null?'mut':ret>=0?'win':'loss')+'">'+(ret==null?'—':(ret>0?'+':'')+ret.toFixed(2)+'%')+'</p></div><p class="formula">'+money(dep)+' deposited '+(allPnl<0?'−':'+')+' '+money(Math.abs(allPnl))+' trading</p></div>';
   h+='<p class="grp">Trading results · closed trades only'+(state.period==='all'?'':' · '+state.period)+'</p><div class="panel strip5"><div><p class="k">Net trading PnL</p><p class="big '+(!S.n?'mut':S.net>0?'win':S.net<0?'loss':'')+'">'+(S.n?sMoney(S.net):'—')+'</p></div><div><p class="k">Win rate</p><p class="big '+(S.n?(S.winRate>=.5?'win':'loss'):'mut')+'">'+(S.n?pctFmt(S.winRate*100):'—')+'</p></div><div><p class="k">Profit factor</p><p class="big">'+(S.pf==null?'—':S.pf.toFixed(2))+'</p></div><div><p class="k">Avg win / avg loss</p><p class="big2" style="margin-top:2px;white-space:nowrap">'+(S.avgWin==null?'—':money(S.avgWin))+' / '+(S.avgLoss==null?'—':money(S.avgLoss))+'</p></div><div><p class="k">Followed plan</p><p class="big">'+(decided.length?pctFmt(fol/decided.length*100):'—')+'</p></div></div>';
   h+='<div class="panel" style="padding:16px 18px;margin-bottom:16px"><div class="curvehead"><div class="seg" role="group" aria-label="Curve"><button class="chip'+(mode==='pnl'?' on':'')+'" data-act="curve" data-v="pnl">Trading PnL</button><button class="chip'+(mode==='balance'?' on':'')+'" data-act="curve" data-v="balance">Balance</button></div><span class="k">'+(mode==='pnl'?'Deposits and withdrawals never move this line.':'Includes deposits, withdrawals and trades.')+'</span></div><div class="svgbox chartbox">'+chartSvg(mode==='pnl'?pnlRows(closed):led,mode==='pnl'?'Close a trade to start your trading curve.':'Your balance curve shows up after your first deposit and trade.',mode==='pnl'?sMoney:money,mode==='pnl')+'</div></div>';
@@ -379,7 +381,7 @@ VIEWS.stats=function(){
   var list=closedIn(),S=tstats(list);
   var h='<div class="top"><div><h1>Stats</h1><p class="sub">'+S.n+' closed '+(S.n===1?'trade':'trades')+(state.period==='all'?'':' in the last '+state.period)+'</p></div>'+periodBar()+'</div>';
   if(!S.n)return h+'<div class="panel empty"><h2>No closed trades yet</h2><p>Stats appear once you have closed trades. Setup, emotion, tags and the plan check are what make them useful.</p><button class="btn primary" data-go="form">New trade</button></div>';
-  if(S.n<20)h+='<div class="callout"><span>Only '+S.n+' closed '+(S.n===1?'trade':'trades')+' so far. Treat these patterns as hints until you have about 20. Groups under 5 trades are dimmed.</span></div>';
+  if(S.n<20&&!closedNotices.small)h+='<div class="callout"><span>Only '+S.n+' closed '+(S.n===1?'trade':'trades')+' so far. Treat these patterns as hints until you have about 20. Groups under 5 trades are dimmed.</span>'+dismissBtn('small')+'</div>';
   h+='<div class="panel strip"><div><p class="k">Profit factor</p><p class="big">'+(S.pf==null?'—':S.pf.toFixed(2))+'</p></div><div><p class="k">Expectancy per trade</p><p class="big '+(S.exp>=0?'win':'loss')+'">'+sMoney(S.exp)+'</p></div><div><p class="k">Avg win / avg loss</p><p class="big2" style="margin-top:2px;white-space:nowrap">'+(S.avgWin==null?'—':money(S.avgWin))+' / '+(S.avgLoss==null?'—':money(S.avgLoss))+'</p></div><div><p class="k">Max drawdown</p><p class="big '+(S.dd>0?'loss':'')+'">'+(S.dd>0?'-':'')+money(S.dd)+'</p></div></div>';
   var order={'Followed':0,'Off plan':1,'Not set':2};
   var pg=groupBy(list,function(x){return x.t.followed===true?'Followed':x.t.followed===false?'Off plan':'Not set'}).map(function(g){return{label:g.k,val:g.net/g.n,n:g.n}}).sort(function(a,b){return order[a.label]-order[b.label]});
@@ -600,6 +602,7 @@ function doRestore(){
 
 /* events */
 var ACT={
+  dismiss:function(b){closedNotices[b.dataset.k]=true;render()},
   curve:function(b){state.curve=b.dataset.v;save();render()},
   calnav:function(b){var mo=cal.month||nyNow().date.slice(0,7),y=+mo.slice(0,4),m=+mo.slice(5)+(+b.dataset.d);if(m<1){m=12;y--}if(m>12){m=1;y++}cal.month=y+'-'+String(m).padStart(2,'0');cal.sel=null;render()},
   caltoday:function(){cal.month=null;cal.sel=nyNow().date;render()},

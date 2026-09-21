@@ -178,6 +178,15 @@ main{padding:18px 14px 80px}
   border-radius: 6px; font-weight: bold; cursor: pointer;
 }
 .login-card button:hover { background: #1d4ed8; }
+.olist{overflow:hidden;margin-bottom:16px}
+.orow{display:grid;grid-template-columns:1fr 1.4fr 1.6fr 236px;gap:12px;align-items:center;padding:12px 16px;border-top:1px solid var(--line)}
+.orow:first-child{border-top:0}
+.orow-act{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.fbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 0 10px}
+.fbar input,.fbar select{width:auto;min-width:0;padding:6px 10px;font-size:13px}
+.fbar input{flex:1 1 180px;max-width:260px}
+.acct.risk{grid-template-columns:repeat(4,minmax(0,1fr)) 1.4fr}
+@media (max-width:820px){.orow{grid-template-columns:1fr;gap:8px}.orow-act{justify-content:flex-start}.acct.risk{grid-template-columns:repeat(2,minmax(0,1fr))}.acct.risk .formula{grid-column:1/-1}}
 </style>
 </head>
 <body>
@@ -187,6 +196,8 @@ main{padding:18px 14px 80px}
       <input type="email" id="auth-email" placeholder="Email" />
       <input type="password" id="auth-password" placeholder="Password" />
       <button onclick="handleLogin()">Log In</button>
+      <button type="button" onclick="handleReset()" style="background:none;color:#93c5fd;padding:0;font-weight:normal;text-decoration:underline">Forgot password?</button>
+      <div id="auth-info" style="color:#22c55e;font-size:0.85rem;text-align:center;"></div>
       <div id="auth-error" style="color: #ef4444; font-size: 0.85rem; text-align: center;"></div>
     </div>
   </div>
@@ -198,6 +209,7 @@ main{padding:18px 14px 80px}
     <button class="navb" data-go="calendar">Calendar</button>
     <button class="navb" data-go="form">New trade</button>
     <button class="navb" data-go="account">Account</button>
+    <button class="navb" data-act="signout" id="signoutbtn" hidden>Sign out</button>
     <p class="note">All times are New York time.</p>
     <p class="note" id="cloudstat" style="margin-top:6px"></p>
   </nav>
@@ -333,9 +345,79 @@ function tstats(list){
 }
 function pnlRows(list){var asc=ascClosed(list),rows=[],cum=0;if(!asc.length)return rows;rows.push({date:asc[0].c.closeDate,balance:0});asc.forEach(function(x){cum+=x.c.net;rows.push({date:x.c.closeDate,balance:cum})});return rows}
 var closedNotices={};
+var tf={q:'',result:'',setup:'',tag:''};
 function dismissBtn(k){return'<button class="icon" data-act="dismiss" data-k="'+k+'" aria-label="Dismiss this notice" title="Dismiss" style="color:inherit;font-size:20px;line-height:1;padding:0 8px">×</button>'}
 function periodBar(){return'<div class="seg" role="group" aria-label="Period">'+['30D','90D','180D','all'].map(function(p){return'<button class="chip'+(state.period===p?' on':'')+'" data-act="period" data-v="'+p+'">'+(p==='all'?'All':p)+'</button>'}).join('')+'</div>'}
 VIEWS={};
+function md(d){return fmtDate(d).replace(/\/\d{4}$/,'')}
+function plural(n,w){return n+' '+w+(n===1?'':'s')}
+function moneyOrUnl(v){return v===null?'Unlimited':money(v)}
+function openExposure(t,c){
+  var rem=c.eq-c.xq;if(rem<=0)return{maxP:0,maxL:0};
+  if(t.market==='option'){
+    var s=+t.strike,p=c.avgIn||0,put=/put/.test(t.dir),short=/^short/.test(t.dir),prem=p*rem*100;
+    if(short)return{maxP:prem,maxL:put?Math.max(0,(s-p)*rem*100):null};
+    return{maxP:put?Math.max(0,(s-p)*rem*100):null,maxL:prem};
+  }
+  var st=+t.stop,a=c.avgIn||0,r=/^short/.test(t.dir)?st-a:a-st;
+  return{maxP:null,maxL:st>0?Math.max(0,r)*rem:null,stock:true};
+}
+function canExpire(t){var c=calc(t);return t.market==='option'&&!!t.expiry&&!c.closed&&t.expiry<=nyNow().date}
+function expireWorthless(id){
+  var t=state.trades.find(function(x){return x.id===id});if(!t||!canExpire(t))return;
+  var c=calc(t),rem=c.eq-c.xq;if(rem<=0)return;
+  var last=c.ex[c.ex.length-1],tm=(last&&last.date===t.expiry&&last.time>'16:00:00')?last.time:'16:00:00';
+  var ex={id:uid(),side:c.entrySide==='sell'?'buy':'sell',date:t.expiry,time:tm,qty:rem,price:0,fee:0};
+  t.execs.push(ex);t.updatedAt=Date.now();save();render();
+  toast(t.symbol+' closed as expired worthless.',function(){t.execs=t.execs.filter(function(x){return x.id!==ex.id});t.updatedAt=Date.now();save();render()});
+}
+function openTradesHtml(open,bal){
+  if(!open.length)return'';
+  var today=nyNow().date,far='9999-99-99';
+  var rows=open.slice().sort(function(a,b){
+    var ea=a.t.market==='option'&&a.t.expiry?a.t.expiry:far,eb=b.t.market==='option'&&b.t.expiry?b.t.expiry:far;
+    return ea.localeCompare(eb)||String(a.c.openDate).localeCompare(String(b.c.openDate));
+  });
+  var h='<div class="curvehead" style="margin-bottom:6px"><p class="grp" style="margin:0">Open trades · '+rows.length+'</p><span class="k">Soonest expiration first</span></div><div class="panel olist">';
+  rows.forEach(function(x){
+    var t=x.t,c=x.c,isOpt=t.market==='option'&&!!t.expiry,dte=isOpt?daysBetween(today,t.expiry):null,pill;
+    if(isOpt){
+      if(dte<0)pill='<span class="pill loss">Expired '+md(t.expiry)+' · needs closing</span>';
+      else if(dte===0)pill='<span class="pill loss">Expires today · '+md(t.expiry)+'</span>';
+      else if(dte===1)pill='<span class="pill loss">Expires in 1 day · '+md(t.expiry)+'</span>';
+      else pill='<span class="pill '+(dte<=3?'warn':'even')+'">Expires in '+dte+' days · '+md(t.expiry)+'</span>';
+    }else{var od=daysBetween(c.openDate,today);pill='<span class="pill even">'+(od<=0?'Opened today':'Open for '+plural(od,'day'))+'</span>'}
+    var unit=t.market==='option'?'contract':'share',verb=c.entrySide==='sell'?'Sold':'Bought';
+    var pos=c.xq>0?c.xq+' of '+plural(c.eq,unit)+' closed':verb+' '+c.eq+' @ '+num(c.avgIn);
+    var e=openExposure(t,c),pc=(e.maxL!==null&&bal>0)?e.maxL/bal*100:null;
+    var lossHtml='<span class="'+((pc!=null&&pc>=100)||(e.maxL===null&&!e.stock)?'loss':'')+'">'+moneyOrUnl(e.maxL)+(pc!=null?' ('+pctFmt(pc)+' of balance)':'')+'</span>';
+    var line=e.stock?'Risk to stop '+lossHtml:'Max profit '+moneyOrUnl(e.maxP)+' · Max loss '+lossHtml;
+    h+='<div class="orow"><div><button class="btn link" data-act="view" data-id="'+t.id+'" style="padding:0;font-size:15px;font-weight:600" aria-label="View '+esc(t.symbol)+'">'+esc(t.symbol)+'</button><p class="k">'+esc(typeLabel(t))+'</p></div><div>'+pill+'<p class="k" style="margin-top:4px">'+pos+'</p></div><div><p class="k">Stock in '+num(t.stockIn)+' · Stop '+num(t.stop)+'</p><p style="font-size:13px;font-weight:500;margin:0">'+line+'</p></div><div class="orow-act">'+(isOpt&&dte<=0?'<button class="btn sm primary" data-act="expiredworthless" data-id="'+t.id+'">Expired worthless</button>':'')+'<button class="btn sm" data-act="addexit" data-id="'+t.id+'">Add exit</button></div></div>';
+  });
+  return h+'</div>';
+}
+function openRiskCell(open,bal){
+  var tot=0,unl=false;
+  open.forEach(function(x){var e=openExposure(x.t,x.c);if(e.maxL===null)unl=true;else tot+=e.maxL});
+  var pct=!unl&&bal>0?tot/bal*100:null;
+  return'<div title="Max loss on open options, and risk to your stop on open stocks"><p class="k">Open risk</p><p class="big2 '+((unl||(pct!=null&&pct>=100))?'loss':'')+'">'+(unl?'Unlimited':money(tot))+'</p>'+(pct!=null?'<p class="k">'+pctFmt(pct)+' of balance</p>':'')+'</div>';
+}
+function applyFilters(list){
+  var q=tf.q.trim().toLowerCase();
+  return list.filter(function(x){
+    var t=x.t,c=x.c;
+    if(q&&t.symbol.toLowerCase().indexOf(q)<0)return false;
+    if(tf.result&&c.result!==tf.result)return false;
+    if(tf.setup&&t.setup!==tf.setup)return false;
+    if(tf.tag&&(t.tags||[]).indexOf(tf.tag)<0)return false;
+    return true;
+  });
+}
+function filterBar(total,shown){
+  var on=tf.q||tf.result||tf.setup||tf.tag;
+  function opt(v,l,cur){return'<option value="'+esc(v)+'"'+(cur===v?' selected':'')+'>'+esc(l)+'</option>'}
+  return'<div class="fbar"><input type="search" data-tf="q" value="'+esc(tf.q)+'" placeholder="Search symbol" aria-label="Search by symbol" autocomplete="off"><select data-tf="result" aria-label="Filter by result">'+opt('','All results',tf.result)+opt('open','Open',tf.result)+opt('win','Win',tf.result)+opt('loss','Loss',tf.result)+opt('even','Even',tf.result)+'</select><select data-tf="setup" aria-label="Filter by setup">'+opt('','All setups',tf.setup)+state.lists.setups.map(function(v){return opt(v,v,tf.setup)}).join('')+'</select><select data-tf="tag" aria-label="Filter by mistake">'+opt('','All mistakes',tf.tag)+state.lists.tags.map(function(v){return opt(v,v,tf.tag)}).join('')+'</select>'+(on?'<button class="btn sm" data-act="clearfilters">Clear</button><span class="k">Showing '+shown+' of '+total+'</span>':'')+'</div>';
+}
 VIEWS.dashboard=function(){
   var all=sortedTrades(),shown=all.filter(function(x){return inPeriod(x.c)}),closed=shown.filter(function(x){return x.c.closed}),open=all.filter(function(x){return!x.c.closed});
   var S=tstats(closed),decided=closed.filter(function(x){return x.t.followed!=null}),fol=decided.filter(function(x){return x.t.followed===true}).length;
@@ -345,15 +427,20 @@ VIEWS.dashboard=function(){
   var h='<div class="top"><div><h1>Dashboard</h1><p class="sub">'+open.length+' open '+(open.length===1?'trade':'trades')+(review.length?' · <button class="btn link" data-act="review">'+review.length+(review.length===1?' trade needs':' trades need')+' a review</button>':'')+'</p></div><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">'+periodBar()+'<button class="btn primary" data-go="form">New trade</button></div></div>';
   if(stale&&!closedNotices.backup)h+='<div class="callout"><span>Your journal lives in this browser only. Back it up so a cleared browser can\'t erase it.</span><span style="display:flex;gap:6px;align-items:center"><button class="btn sm" data-go="account">Back up now</button>'+dismissBtn('backup')+'</span></div>';
   if(!state.cash.length&&!closedNotices.deposit)h+='<div class="callout"><span>Add your starting deposit so balance and returns are tracked from day one.</span><span style="display:flex;gap:6px;align-items:center"><button class="btn sm" data-go="account">Add deposit</button>'+dismissBtn('deposit')+'</span></div>';
-  h+='<p class="grp">Account</p><div class="panel acct"><div><p class="k">Balance</p><p class="big2">'+money(bal)+'</p></div><div><p class="k">Net deposited</p><p class="big2">'+money(dep)+'</p></div><div><p class="k">Return on deposits</p><p class="big2 '+(ret==null?'mut':ret>=0?'win':'loss')+'">'+(ret==null?'—':(ret>0?'+':'')+ret.toFixed(2)+'%')+'</p></div><p class="formula">'+money(dep)+' deposited '+(allPnl<0?'−':'+')+' '+money(Math.abs(allPnl))+' trading</p></div>';
+  h+=openTradesHtml(open,bal);
+  var riskCell=open.length?openRiskCell(open,bal):'';
+  h+='<p class="grp">Account</p><div class="panel acct'+(open.length?' risk':'')+'"><div><p class="k">Balance</p><p class="big2">'+money(bal)+'</p></div><div><p class="k">Net deposited</p><p class="big2">'+money(dep)+'</p></div><div><p class="k">Return on deposits</p><p class="big2 '+(ret==null?'mut':ret>=0?'win':'loss')+'">'+(ret==null?'—':(ret>0?'+':'')+ret.toFixed(2)+'%')+'</p></div>'+riskCell+'<p class="formula">'+money(dep)+' deposited '+(allPnl<0?'−':'+')+' '+money(Math.abs(allPnl))+' trading</p></div>';
   h+='<p class="grp">Trading results · closed trades only'+(state.period==='all'?'':' · '+state.period)+'</p><div class="panel strip5"><div><p class="k">Net trading PnL</p><p class="big '+(!S.n?'mut':S.net>0?'win':S.net<0?'loss':'')+'">'+(S.n?sMoney(S.net):'—')+'</p></div><div><p class="k">Win rate</p><p class="big '+(S.n?(S.winRate>=.5?'win':'loss'):'mut')+'">'+(S.n?pctFmt(S.winRate*100):'—')+'</p></div><div><p class="k">Profit factor</p><p class="big">'+(S.pf==null?'—':S.pf.toFixed(2))+'</p></div><div><p class="k">Avg win / avg loss</p><p class="big2" style="margin-top:2px;white-space:nowrap">'+(S.avgWin==null?'—':money(S.avgWin))+' / '+(S.avgLoss==null?'—':money(S.avgLoss))+'</p></div><div><p class="k">Followed plan</p><p class="big">'+(decided.length?pctFmt(fol/decided.length*100):'—')+'</p></div></div>';
   h+='<div class="panel" style="padding:16px 18px;margin-bottom:16px"><div class="curvehead"><div class="seg" role="group" aria-label="Curve"><button class="chip'+(mode==='pnl'?' on':'')+'" data-act="curve" data-v="pnl">Trading PnL</button><button class="chip'+(mode==='balance'?' on':'')+'" data-act="curve" data-v="balance">Balance</button></div><span class="k">'+(mode==='pnl'?'Deposits and withdrawals never move this line.':'Includes deposits, withdrawals and trades.')+'</span></div><div class="svgbox chartbox">'+chartSvg(mode==='pnl'?pnlRows(closed):led,mode==='pnl'?'Close a trade to start your trading curve.':'Your balance curve shows up after your first deposit and trade.',mode==='pnl'?sMoney:money,mode==='pnl')+'</div></div>';
+  var tableRows=applyFilters(shown);
   if(!shown.length){h+='<div class="panel empty"><h2>Log your first trade</h2><p>Save the entry when you get in with your stop and a one-line plan. Add the exit later.</p><button class="btn primary" data-go="form">New trade</button></div>'}
   else{
+    h+=filterBar(shown.length,tableRows.length);
     h+='<div class="panel tablewrap"><table class="tbl"><thead><tr><th>Date</th><th>Symbol</th><th>Result</th><th>Type</th><th class="n">Stock in</th><th class="n">Stop</th><th class="n">Stock out</th><th>Plan</th><th>Tags</th><th class="n">Return</th><th></th></tr></thead><tbody>';
-    shown.forEach(function(x){var t=x.t,c=x.c,pl=!c.closed?'<span class="mut">—</span>':t.followed===true?'<span class="win">Yes</span>':t.followed===false?'<span class="loss">No</span>':'<span class="mut">Not set</span>';
+    tableRows.forEach(function(x){var t=x.t,c=x.c,pl=!c.closed?'<span class="mut">—</span>':t.followed===true?'<span class="win">Yes</span>':t.followed===false?'<span class="loss">No</span>':'<span class="mut">Not set</span>';
       var tags=(t.tags||[]).slice(0,2).map(function(g){return'<span class="chip static">'+esc(g)+'</span>'}).join(' ')+((t.tags||[]).length>2?' <span class="mut">+'+(t.tags.length-2)+'</span>':'');
       h+='<tr data-open="'+t.id+'" tabindex="0"><td>'+fmtDate(c.closed?c.closeDate:c.openDate)+'</td><td class="sym">'+esc(t.symbol)+'</td><td><span class="pill '+c.result+'">'+({win:'Win',loss:'Loss',even:'Even',open:'Open'})[c.result]+'</span></td><td>'+esc(typeLabel(t))+'</td><td class="n">'+num(t.stockIn)+'</td><td class="n">'+num(t.stop)+'</td><td class="n">'+(+t.stockOut>0?num(t.stockOut):'—')+'</td><td>'+pl+'</td><td>'+tags+'</td><td class="n '+(c.result==='win'?'win':c.result==='loss'?'loss':'mut')+'">'+(c.closed?sMoney(c.net)+' <span class="mut">'+(c.pct!=null?(c.pct>0?'+':'')+c.pct.toFixed(2)+'%':'')+'</span>':'—')+'</td><td style="text-align:right"><button class="icon" data-act="view" data-id="'+t.id+'" aria-label="View trade" title="View">'+ICON.view+'</button><button class="icon" data-act="edit" data-id="'+t.id+'" aria-label="Edit trade">'+ICON.edit+'</button><button class="icon" data-act="del" data-id="'+t.id+'" aria-label="Delete trade">'+ICON.trash+'</button></td></tr>'});
+    if(!tableRows.length)h+='<tr><td colspan="11" class="mut" style="text-align:center;padding:24px">No trades match these filters.</td></tr>';
     h+='</tbody></table></div>';
   }
   var del=state.trades.filter(function(t){return t.deletedAt}).length;
@@ -465,7 +552,7 @@ function execChart(c){
 VIEWS.detail=function(){
   var t=state.trades.find(function(x){return x.id===view.id});if(!t)return'<p>That trade no longer exists.</p>';
   var c=calc(t),r=risk(t,c),h='',back=view.from||'dashboard';
-  h+='<div class="top"><div><button class="btn link" data-go="'+back+'" style="padding-left:0">← '+cap(back)+'</button><h1 style="margin-top:4px">'+esc(t.symbol)+' <span class="pill '+c.result+'" style="vertical-align:middle">'+({win:'Win',loss:'Loss',even:'Even',open:'Open'})[c.result]+'</span></h1><p class="sub">'+esc(typeLabel(t))+(t.market==='option'&&t.expiry?' · expires '+fmtDate(t.expiry):'')+'</p></div><div style="display:flex;gap:8px;flex-wrap:wrap">'+(!c.closed?'<button class="btn primary" data-act="addexit" data-id="'+t.id+'">Add exit</button>':'')+'<button class="btn" data-act="edit" data-id="'+t.id+'">Edit</button><button class="btn danger" data-act="del" data-id="'+t.id+'">Delete</button></div></div>';
+  h+='<div class="top"><div><button class="btn link" data-go="'+back+'" style="padding-left:0">← '+cap(back)+'</button><h1 style="margin-top:4px">'+esc(t.symbol)+' <span class="pill '+c.result+'" style="vertical-align:middle">'+({win:'Win',loss:'Loss',even:'Even',open:'Open'})[c.result]+'</span></h1><p class="sub">'+esc(typeLabel(t))+(t.market==='option'&&t.expiry?' · expires '+fmtDate(t.expiry):'')+'</p></div><div style="display:flex;gap:8px;flex-wrap:wrap">'+(canExpire(t)?'<button class="btn" data-act="expiredworthless" data-id="'+t.id+'">Expired worthless</button>':'')+(!c.closed?'<button class="btn primary" data-act="addexit" data-id="'+t.id+'">Add exit</button>':'')+'<button class="btn" data-act="edit" data-id="'+t.id+'">Edit</button><button class="btn danger" data-act="del" data-id="'+t.id+'">Delete</button></div></div>';
   h+='<div class="panel" style="padding:18px 20px;margin-bottom:16px"><p class="big '+(c.result==='win'?'win':c.result==='loss'?'loss':'')+'">'+(c.closed?sMoney(c.net)+' <span style="font-size:16px;font-weight:500">'+(c.pct!=null?'('+(c.pct>0?'+':'')+c.pct.toFixed(2)+'%)':'')+'</span>':'Open')+'</p><p class="k" style="margin:2px 0 4px">Stock price levels</p><div class="svgbox">'+ladder(t)+'</div></div>';
   h+='<div class="two"><div><h2>Risk and reward</h2><table class="rows">'+
     (t.market==='option'?'<tr><td>Max profit</td><td>'+(typeof r.maxP==='number'?money(r.maxP):esc(r.maxP))+'</td></tr><tr><td>Max loss</td><td>'+(typeof r.maxL==='number'?money(r.maxL):esc(r.maxL))+'</td></tr><tr><td>Breakeven</td><td>'+num(r.be)+'</td></tr><tr><td>Days to expiration at entry</td><td>'+(r.dte==null?'—':r.dte)+'</td></tr>':'<tr><td>Average entry</td><td>'+num(c.avgIn)+'</td></tr>')+
@@ -608,6 +695,9 @@ var ACT={
   caltoday:function(){cal.month=null;cal.sel=nyNow().date;render()},
   calday:function(b){cal.sel=b.dataset.d;render()},
   period:function(b){state.period=b.dataset.v;save();render()},
+  expiredworthless:function(b){expireWorthless(b.dataset.id)},
+  clearfilters:function(){tf={q:'',result:'',setup:'',tag:''};render()},
+  signout:function(){if(window.handleLogout)window.handleLogout()},
   review:function(){var r=needsReview();if(r.length)go('detail',{id:r[0].t.id})},
   view:function(b){go('detail',{id:b.dataset.id,from:view.name})},
   edit:function(b){startEdit(b.dataset.id)},addexit:function(b){startEdit(b.dataset.id,true)},
@@ -665,6 +755,7 @@ function handle(e){
   else if(t.dataset.ex&&draft){var i=+t.closest('.ex').dataset.i;draft.execs[i][t.dataset.ex]=t.value;if(t.dataset.ex==='side'||t.dataset.ex==='qty'){var c=calc({market:draft.market,dir:draft.dir,execs:draft.execs});$('#exhint').textContent=c.closed?'Exit recorded. This trade will be saved as closed.':'No exit yet. This trade will be saved as Open until you add one.'}}
   else if(t.dataset.cash&&cashDraft){cashDraft[t.dataset.cash]=t.value}
   else if(t.dataset.set){var v=parseFloat(t.value);if(v>=0){state.settings.fee=v;save()}}
+  else if(t.dataset.tf){tf[t.dataset.tf]=t.value;var pos=t.selectionStart;render();if(t.dataset.tf==='q'){var qn=document.querySelector('[data-tf=q]');if(qn){qn.focus();try{qn.setSelectionRange(pos,pos)}catch(x){}}}}
 }
 document.addEventListener('keydown',function(e){
   if(e.key==='Escape'&&!$('#lb').hidden){$('#lb').hidden=true;return}
@@ -760,7 +851,7 @@ if(typeof document!=='undefined'&&document.getElementById('root'))boot();
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
     import { getFirestore, doc, setDoc, getDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-    import { getAuth, signInWithEmailAndPassword, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+    import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyAEA8gPF-VjvMBRi2mrY6DoXSHUIQPGbBE",
@@ -778,6 +869,8 @@ if(typeof document!=='undefined'&&document.getElementById('root'))boot();
     // Auth State Monitor
     onAuthStateChanged(window.auth, (user) => {
       const overlay = document.getElementById("login-overlay");
+      const so = document.getElementById("signoutbtn");
+      if (so) so.hidden = !user;
       if (user) {
         console.log("Authenticated as:", user.email);
         overlay.style.display = "none";
@@ -799,6 +892,28 @@ if(typeof document!=='undefined'&&document.getElementById('root'))boot();
         await signInWithEmailAndPassword(window.auth, email, password);
       } catch (err) {
         errDiv.textContent = "Invalid login credentials.";
+        console.error(err);
+      }
+    };
+
+    // Sign out
+    window.handleLogout = async function() {
+      try { await signOut(window.auth); } catch (err) { console.error(err); }
+    };
+
+    // Forgot password
+    window.handleReset = async function() {
+      const email = document.getElementById("auth-email").value.trim();
+      const errDiv = document.getElementById("auth-error");
+      const info = document.getElementById("auth-info");
+      errDiv.textContent = "";
+      info.textContent = "";
+      if (!email) { errDiv.textContent = "Enter your email above first."; return; }
+      try {
+        await sendPasswordResetEmail(window.auth, email);
+        info.textContent = "If that email has an account, a reset link is on its way.";
+      } catch (err) {
+        errDiv.textContent = "Couldn't send the reset email. Check the address and try again.";
         console.error(err);
       }
     };

@@ -858,7 +858,8 @@ var WL_BIAS=['Bullish','Bearish','Neutral'],WL_EMA=['Above both','Testing 8','Te
 var wl=null,wlUI={f:'all',week:''},wlT=null,wlLoaded=false,wlLast=0;
 function wlRow(g,t){return{id:'r_'+t,group:g,ticker:t,bias:'',ema:'',levels:'',at:'',db:'',checked:'',waiting:'',updatedAt:0}}
 function wlDefault(){return{rows:WL_DEF.map(function(p){return wlRow(p[0],p[1])}),snaps:[],purged:{}}}
-function wlAplus(r){return(r.bias==='Bullish'||r.bias==='Bearish')&&r.db==='Yes'&&(r.at==='Yes'||r.at==='Approaching')}||r.hl==='New high'||r.hl==='New low'}
+function wlAction(r){return r.at==='Yes'||r.at==='Approaching'}
+function wlAplus(r){return (r.bias==='Bullish'||r.bias==='Bearish') && r.db==='Yes' && (r.at==='Yes'||r.at==='Approaching')}
 function wlAge(r){return r.checked?daysBetween(r.checked,nyNow().date):null}
 function wlClone(){return JSON.parse(JSON.stringify(wl))}
 function wlPersist(){clearTimeout(wlT);wlT=setTimeout(function(){var c=wlClone();dbPut('kv','watchlist',c).catch(function(){});var u=window.auth&&window.auth.currentUser;if(u&&window.cloudWlPut)window.cloudWlPut(u.uid,c).catch(function(e){console.error(e);toast('Watchlist saved on this device only')})},400)}
@@ -906,7 +907,7 @@ VIEWS.watchlist=function(){
   var lastG=null;
   list.forEach(function(r){
     if(wlUI.f!=='neglected'&&r.group!==lastG){lastG=r.group;h+='<tr class="gh"><td colspan="8">'+esc(r.group)+'</td></tr>'}
-    h+='<tr><td class="sym">'+(wlAction(r)?'<span style="color:var(--accent)" title="At a level or breaking">●</span> ':'')+esc(r.ticker) +(wlAplus(r)?' <span class="pill win">A+</span>':'')+'</td><td>'+wlSel(r,'bias',WL_BIAS,ro)+'</td><td>'+wlSel(r,'ema',WL_EMA,ro)+'</td><td>'+wlSel(r,'at',WL_AT,ro)+'</td><td>'+wlSel(r,'hl',WL_HL,ro)+'</td><td>'+wlChecked(r,ro)+'</td><td>'+wlTxt(r,'waiting','wt',ro)+'</td><td style="text-align:right">'+(ro?'':'<button class="icon" data-act="wldel" data-id="'+r.id+'" aria-label="Remove '+esc(r.ticker)+'">'+ICON.trash+'</button>')+'</td></tr>';
+    h+='<tr><td class="sym">'+(wlAction(r)?'<span style="color:var(--accent)" title="At a level or breaking">●</span> ':'')+esc(r.ticker) +(wlAplus(r)?' <span class="pill win">A+</span>':'')+'</td><td>'+wlSel(r,'bias',WL_BIAS,ro)+'</td><td>'+wlSel(r,'ema',WL_EMA,ro)+'</td><td>'+wlSel(r,'at',WL_AT,ro)+'</td><td>'+wlSel(r,'db',WL_DB,ro)+'</td><td>'+wlChecked(r,ro)+'</td><td>'+wlTxt(r,'waiting','wt',ro)+'</td><td style="text-align:right">'+(ro?'':'<button class="icon" data-act="wldel" data-id="'+r.id+'" aria-label="Remove '+esc(r.ticker)+'">'+ICON.trash+'</button>')+'</td></tr>';
   });
   if(!list.length)h+='<tr><td colspan="9" class="mut" style="text-align:center;padding:24px">Nothing here.</td></tr>';
   h+='</tbody></table></div>';

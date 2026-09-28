@@ -854,11 +854,11 @@ if(typeof document!=='undefined'&&document.getElementById('root'))boot();
   <script>
 /* ===== Watchlist page ===== */
 var WL_DEF=[['Market','IWM'],['Market','QQQ'],['Market','SPY'],['Market','TLT'],['Market','VIX'],['Leveraged','TQQQ/SQQQ'],['Mega-cap','AAPL'],['Mega-cap','AMZN'],['Mega-cap','GOOG/GOOGL'],['Mega-cap','META'],['Mega-cap','MSFT'],['Mega-cap','NFLX'],['Mega-cap','TSLA'],['Semis','AMD'],['Semis','INTC'],['Semis','MU'],['Semis','NVDA'],['Crypto','COIN'],['Crypto','GBTC'],['Crypto','MARA'],['Crypto','MSTR'],['Crypto','RIOT'],['Energy','XLE'],['Energy','XOM'],['China','BABA']];
-var WL_BIAS=['Bullish','Bearish','Neutral'],WL_EMA=['Above both','Testing 8','Testing 21','Between','Below both'],WL_AT=['Yes','Approaching','No'],WL_HL=['New high','New low','No'];
+var WL_BIAS=['Bullish','Bearish','Neutral'],WL_EMA=['Above both','Testing 8','Testing 21','Between','Below both'],WL_AT=['Yes','Approaching','No'],WL_DB=['Yes','No'];
 var wl=null,wlUI={f:'all',week:''},wlT=null,wlLoaded=false,wlLast=0;
-function wlRow(g,t){return{id:'r_'+t,group:g,ticker:t,bias:'',ema:'',levels:'',at:'',hl:'',checked:'',waiting:'',updatedAt:0}}
+function wlRow(g,t){return{id:'r_'+t,group:g,ticker:t,bias:'',ema:'',levels:'',at:'',db:'',checked:'',waiting:'',updatedAt:0}}
 function wlDefault(){return{rows:WL_DEF.map(function(p){return wlRow(p[0],p[1])}),snaps:[],purged:{}}}
-function wlAction(r){return r.at==='Yes'||r.at==='Approaching'||r.hl==='New high'||r.hl==='New low'}
+function wlAplus(r){return(r.bias==='Bullish'||r.bias==='Bearish')&&r.db==='Yes'&&(r.at==='Yes'||r.at==='Approaching')}||r.hl==='New high'||r.hl==='New low'}
 function wlAge(r){return r.checked?daysBetween(r.checked,nyNow().date):null}
 function wlClone(){return JSON.parse(JSON.stringify(wl))}
 function wlPersist(){clearTimeout(wlT);wlT=setTimeout(function(){var c=wlClone();dbPut('kv','watchlist',c).catch(function(){});var u=window.auth&&window.auth.currentUser;if(u&&window.cloudWlPut)window.cloudWlPut(u.uid,c).catch(function(e){console.error(e);toast('Watchlist saved on this device only')})},400)}
@@ -881,7 +881,7 @@ function wlLoad(){
 }
 function wlSel(r,f,opts,ro){
   var v=r[f]||'';if(ro)return esc(v||'—');
-  var col=(v==='Bullish'||v==='New high')?'var(--win)':(v==='Bearish'||v==='New low')?'var(--loss)':(v==='Yes'||v==='Approaching'||/^Testing/.test(v))?'var(--warn)':'inherit';
+  var col=v==='Bullish'?'var(--win)':v==='Bearish'?'var(--loss)':(f==='db'&&v==='Yes')?'var(--win)':((f==='at'&&(v==='Yes'||v==='Approaching'))||/^Testing/.test(v))?'var(--warn)':'inherit';
   return'<select data-wl="'+f+'" data-id="'+r.id+'" aria-label="'+f+' for '+esc(r.ticker)+'" style="color:'+col+'"><option value=""></option>'+opts.map(function(o){return'<option'+(o===v?' selected':'')+'>'+o+'</option>'}).join('')+'</select>';
 }
 function wlTxt(r,f,cls,ro){return ro?esc(r[f]||''):'<input class="'+cls+'" data-wl="'+f+'" data-id="'+r.id+'" value="'+esc(r[f])+'" aria-label="'+f+' for '+esc(r.ticker)+'" autocomplete="off">'}
@@ -902,11 +902,11 @@ VIEWS.watchlist=function(){
   var h='<div class="top"><div><h1>Watchlist</h1><p class="sub">'+nAct+' at a level or breaking · '+nStale+' not checked in 3+ days</p></div><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><select class="mini" style="width:auto" data-wl="week" aria-label="Saved week"><option value="">Live sheet</option>'+snaps.map(function(s){return'<option value="'+s.id+'"'+(s.id===wlUI.week?' selected':'')+'>'+esc(s.label)+'</option>'}).join('')+'</select>'+(ro?'':'<button class="btn primary" data-act="wlsave">Save week</button>')+'</div></div>';
   if(ro)h+='<div class="callout"><span>Viewing <b>'+esc(snap.label)+'</b>, saved '+fmtDate(snap.savedAt)+'. Read-only.</span><button class="btn sm" data-act="wlback">Back to live</button></div>';
   h+='<div class="seg" style="margin-bottom:10px" role="group" aria-label="Filter">'+[['all','All ('+rows.length+')'],['today','Today\'s list ('+nAct+')'],['neglected','Neglected ('+nStale+')']].map(function(c){return'<button class="chip'+(wlUI.f===c[0]?' on':'')+'" data-act="wlfilter" data-v="'+c[0]+'">'+c[1]+'</button>'}).join('')+'</div>';
-  h+='<div class="panel tablewrap"><table class="tbl wl"><thead><tr><th>Ticker</th><th>Bias</th><th>Daily 8/21</th><th>At level?</th><th>New high/low?</th><th>Checked</th><th>Waiting for</th><th></th></tr></thead><tbody>';
+  h+='<div class="panel tablewrap"><table class="tbl wl"><thead><tr><th>Ticker</th><th>Bias</th><th>Daily 8/21</th><th>At level?</th><th>Recent double break?</th><th>Checked</th><th>Waiting for</th><th></th></tr></thead><tbody>';
   var lastG=null;
   list.forEach(function(r){
     if(wlUI.f!=='neglected'&&r.group!==lastG){lastG=r.group;h+='<tr class="gh"><td colspan="8">'+esc(r.group)+'</td></tr>'}
-    h+='<tr><td class="sym">'+(wlAction(r)?'<span style="color:var(--accent)" title="At a level or breaking">●</span> ':'')+esc(r.ticker)+'</td><td>'+wlSel(r,'bias',WL_BIAS,ro)+'</td><td>'+wlSel(r,'ema',WL_EMA,ro)+'</td><td>'+wlSel(r,'at',WL_AT,ro)+'</td><td>'+wlSel(r,'hl',WL_HL,ro)+'</td><td>'+wlChecked(r,ro)+'</td><td>'+wlTxt(r,'waiting','wt',ro)+'</td><td style="text-align:right">'+(ro?'':'<button class="icon" data-act="wldel" data-id="'+r.id+'" aria-label="Remove '+esc(r.ticker)+'">'+ICON.trash+'</button>')+'</td></tr>';
+    h+='<tr><td class="sym">'+(wlAction(r)?'<span style="color:var(--accent)" title="At a level or breaking">●</span> ':'')+esc(r.ticker) +(wlAplus(r)?' <span class="pill win">A+</span>':'')+'</td><td>'+wlSel(r,'bias',WL_BIAS,ro)+'</td><td>'+wlSel(r,'ema',WL_EMA,ro)+'</td><td>'+wlSel(r,'at',WL_AT,ro)+'</td><td>'+wlSel(r,'hl',WL_HL,ro)+'</td><td>'+wlChecked(r,ro)+'</td><td>'+wlTxt(r,'waiting','wt',ro)+'</td><td style="text-align:right">'+(ro?'':'<button class="icon" data-act="wldel" data-id="'+r.id+'" aria-label="Remove '+esc(r.ticker)+'">'+ICON.trash+'</button>')+'</td></tr>';
   });
   if(!list.length)h+='<tr><td colspan="9" class="mut" style="text-align:center;padding:24px">Nothing here.</td></tr>';
   h+='</tbody></table></div>';

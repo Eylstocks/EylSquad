@@ -933,11 +933,8 @@ ACT.wlsave=function(){
   wl.snaps.push({id:id,label:'Week of '+fmtDate(mon),savedAt:d,updatedAt:Date.now(),rows:wlClone().rows});
   wlPersist();render();toast(had?'This week\'s snapshot was updated':'Week saved');
 };
-ACT.wladd=function(){
-  var t=$('[data-wl=ntick]').value.trim().toUpperCase(),g=$('[data-wl=ngrp]').value.trim()||'Other';if(!t)return;
-  if(wl.rows.some(function(x){return x.ticker===t})){toast(t+' is already on the list');return}
-  var r=wlRow(g,t);r.updatedAt=Date.now();wl.rows.push(r);wlPersist();render();
-};
+ACT.wladd=function(){var t=$('[data-wl=ntick]').value.trim().toUpperCase(),g=$('[data-wl=ngrp]').value.trim()||'Other';if(!t)return;if(wl.rows.some(function(x){return x.ticker===t})){toast(t+' is already on the list');return}var r=wlRow(g,t);r.updatedAt=Date.now();wl.rows.push(r);wl.rows.sort(function(a,b){return a.group.localeCompare(b.group)||a.ticker.localeCompare(b.ticker)});wlPersist();render();};
+
 ACT.wldel=function(b){var i=wl.rows.findIndex(function(x){return x.id===b.dataset.id});if(i<0)return;var r=wl.rows[i];if(!confirm('Are you sure you want to remove '+r.ticker+' from the watchlist?'))return;wl.rows.splice(i,1);wl.purged[r.id]=Date.now();wlPersist();render();toast(r.ticker+' removed',function(){delete wl.purged[r.id];r.updatedAt=Date.now()+1;wl.rows.splice(i,0,r);wlPersist();render()});};
 
 </script>

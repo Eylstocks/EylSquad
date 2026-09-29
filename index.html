@@ -857,11 +857,12 @@ if(typeof document!=='undefined'&&document.getElementById('root'))boot();
 var WL_DEF=[['Market','SPY'],['Market','QQQ'],['Market','IWM'],['Market','TLT'],['Market','VIX'],['Leveraged','TQQQ/SQQQ'],['Mega-cap','AAPL'],['Mega-cap','AMZN'],['Mega-cap','GOOG/GOOGL'],['Mega-cap','META'],['Mega-cap','MSFT'],['Mega-cap','NFLX'],['Mega-cap','TSLA'],['Semis','AMD'],['Semis','INTC'],['Semis','MU'],['Semis','NVDA'],['Crypto','COIN'],['Crypto','GBTC'],['Crypto','MARA'],['Crypto','MSTR'],['Crypto','RIOT'],['Energy','XLE'],['Energy','XOM'],['China','BABA']];
 var WL_BIAS=['Bullish','Bearish','Neutral'],WL_EMA=['Above both','Testing 8','Testing 21','Between','Below both'],WL_AT=['Yes','Approaching','No'],WL_DB=['Yes','No'];
 var wl=null,wlUI={f:'all'},wlT=null,wlLoaded=false;
-function wlRow(g,t){return{id:'r_'+t,group:g,ticker:t,bias:'',ema:'',levels:'',at:'',db:'',checked:'',waiting:'',updatedAt:0}}
+function wlRow(g,t){return{id:'r_'+t,group:g,ticker:t,bias:'',ema:'',levels:'',at:'',db:'',checked:'',waiting:'',skip:'',updatedAt:0}}
 function wlDefault(){return{rows:WL_DEF.map(function(p){return wlRow(p[0],p[1])})}}
 function wlAction(r){return r.at==='Yes'||r.at==='Approaching'}
 function wlAplus(r){return (r.bias==='Bullish'||r.bias==='Bearish') && r.db==='Yes' && (r.at==='Yes'||r.at==='Approaching')}
 function wlAge(r){return r.checked?daysBetween(r.checked,nyNow().date):null}
+function wlSkipped(r){return r.skip===nyNow().date}
 function wlClone(){return JSON.parse(JSON.stringify(wl))}
 /* saves to this browser only */
 function wlPersist(){clearTimeout(wlT);wlT=setTimeout(function(){dbPut('kv','watchlist',wlClone()).catch(function(){})},400)}
@@ -882,23 +883,31 @@ function wlChecked(r){
 VIEWS.watchlist=function(){
   wlLoad();
   if(!wl)return'<div class="top"><h1>Watchlist</h1></div><p class="mut">Loading…</p>';
-  var rows=wl.rows,stale=function(r){var a=wlAge(r);return a==null||a>=3};
-  var nAct=rows.filter(wlAction).length,nStale=rows.filter(stale).length,list=rows.slice();
-  if(wlUI.f==='today')list=list.filter(wlAction);
-  if(wlUI.f==='neglected')list=list.filter(stale).sort(function(a,b){return(a.checked||'').localeCompare(b.checked||'')});
-  var h='<div class="top"><div><h1>Watchlist</h1><p class="sub">'+nAct+' at a level or breaking · '+nStale+' not checked in 3+ days</p></div><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button class="btn primary" data-act="wlsave">Save week</button></div></div>';
-  h+='<div class="seg" style="margin-bottom:10px" role="group" aria-label="Filter">'+[['all','All ('+rows.length+')'],['today','Today\'s list ('+nAct+')'],['neglected','Neglected ('+nStale+')']].map(function(c){return'<button class="chip'+(wlUI.f===c[0]?' on':'')+'" data-act="wlfilter" data-v="'+c[0]+'">'+c[1]+'</button>'}).join('')+'</div>';
+  var skipped=wl.rows.filter(wlSkipped),active=wl.rows.filter(function(r){return!wlSkipped(r)});
+  var stale=function(r){var a=wlAge(r);return a==null||a>=3};
+  var nAct=active.filter(wlAction).length,nStale=active.filter(stale).length,list;
+  if(wlUI.f==='skipped')list=skipped.slice();
+  else{
+    list=active.slice();
+    if(wlUI.f==='today')list=list.filter(wlAction);
+    if(wlUI.f==='neglected')list=list.filter(stale).sort(function(a,b){return(a.checked||'').localeCompare(b.checked||'')});
+  }
+  var h='<div class="top"><div><h1>Watchlist</h1><p class="sub">'+nAct+' at a level or breaking · '+nStale+' not checked in 3+ days'+(skipped.length?' · '+skipped.length+' skipped today':'')+'</p></div><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button class="btn primary" data-act="wlsave">Save today\'s list</button></div></div>';
+  h+='<div class="seg" style="margin-bottom:10px" role="group" aria-label="Filter">'+[['all','All ('+active.length+')'],['today','Today\'s list ('+nAct+')'],['neglected','Neglected ('+nStale+')'],['skipped','Skipped ('+skipped.length+')']].map(function(c){return'<button class="chip'+(wlUI.f===c[0]?' on':'')+'" data-act="wlfilter" data-v="'+c[0]+'">'+c[1]+'</button>'}).join('')+'</div>';
   h+='<div class="panel tablewrap"><table class="tbl wl"><thead><tr><th>Ticker</th><th>Bias</th><th>Daily 8/21</th><th>At level?</th><th>Recent double break?</th><th>Checked</th><th>Waiting for</th><th></th></tr></thead><tbody>';
   var lastG=null;
   list.forEach(function(r){
     if(wlUI.f!=='neglected'&&r.group!==lastG){lastG=r.group;h+='<tr class="gh"><td colspan="8">'+esc(r.group)+'</td></tr>'}
-    h+='<tr><td class="sym">'+(wlAction(r)?'<span style="color:var(--accent)" title="At a level or breaking">●</span> ':'')+esc(r.ticker)+(wlAplus(r)?' <span class="pill win">A+</span>':'')+'</td><td>'+wlSel(r,'bias',WL_BIAS)+'</td><td>'+wlSel(r,'ema',WL_EMA)+'</td><td>'+wlSel(r,'at',WL_AT)+'</td><td>'+wlSel(r,'db',WL_DB)+'</td><td>'+wlChecked(r)+'</td><td>'+wlTxt(r,'waiting','wt')+'</td><td style="text-align:right"><button class="icon" data-act="wldel" data-id="'+r.id+'" aria-label="Remove '+esc(r.ticker)+'">'+ICON.trash+'</button></td></tr>';
+    var acts=wlUI.f==='skipped'
+      ?'<button class="btn sm" data-act="wlunskip" data-id="'+r.id+'">Bring back</button>'
+      :'<button class="btn sm" data-act="wlskip" data-id="'+r.id+'" title="Hide for today. Comes back tomorrow." aria-label="Skip '+esc(r.ticker)+' for today">Skip</button> <button class="icon" data-act="wldel" data-id="'+r.id+'" aria-label="Remove '+esc(r.ticker)+'">'+ICON.trash+'</button>';
+    h+='<tr><td class="sym">'+(wlAction(r)?'<span style="color:var(--accent)" title="At a level or breaking">●</span> ':'')+esc(r.ticker)+(wlAplus(r)?' <span class="pill win">A+</span>':'')+'</td><td>'+wlSel(r,'bias',WL_BIAS)+'</td><td>'+wlSel(r,'ema',WL_EMA)+'</td><td>'+wlSel(r,'at',WL_AT)+'</td><td>'+wlSel(r,'db',WL_DB)+'</td><td>'+wlChecked(r)+'</td><td>'+wlTxt(r,'waiting','wt')+'</td><td style="text-align:right;white-space:nowrap">'+acts+'</td></tr>';
   });
-  if(!list.length)h+='<tr><td colspan="8" class="mut" style="text-align:center;padding:24px">Nothing here.</td></tr>';
+  if(!list.length)h+='<tr><td colspan="8" class="mut" style="text-align:center;padding:24px">'+(wlUI.f==='skipped'?'Nothing skipped today.':'Nothing here.')+'</td></tr>';
   h+='</tbody></table></div>';
   var gs=Array.from(new Set(wl.rows.map(function(r){return r.group})));
   h+='<datalist id="wlgroups">'+gs.map(function(g){return'<option value="'+esc(g)+'">'}).join('')+'</datalist><div class="fbar" style="margin-top:12px"><input data-wl="ntick" placeholder="Ticker" aria-label="New ticker" style="text-transform:uppercase"><input data-wl="ngrp" list="wlgroups" placeholder="Group" aria-label="Group"><button class="btn sm" data-act="wladd">Add ticker</button></div>';
-  return h+'<p class="hint">Today\'s list = at a level or a new high/low. Colors on the date: green today, yellow 3+ days, red 7+ days. The sheet is kept in this browser; Save week downloads a CSV copy to your device.</p>';
+  return h+'<p class="hint">Today\'s list = at a level or a new high/low. Skip hides a ticker until tomorrow. Colors on the date: green today, yellow 3+ days, red 7+ days. The sheet is kept in this browser; Save today\'s list downloads a CSV (opens in Excel) with only the tickers at a level.</p>';
 };
 document.addEventListener('change',function(e){
   var t=e.target,f=t.dataset&&t.dataset.wl;if(!f)return;
@@ -909,12 +918,20 @@ document.addEventListener('change',function(e){
 });
 ACT.wlfilter=function(b){wlUI.f=b.dataset.v;render()};
 ACT.wlcheck=function(b){var r=wl.rows.find(function(x){return x.id===b.dataset.id});if(!r)return;r.checked=nyNow().date;r.updatedAt=Date.now();wlPersist();render()};
+ACT.wlskip=function(b){
+  var r=wl.rows.find(function(x){return x.id===b.dataset.id});if(!r)return;
+  r.skip=nyNow().date;r.updatedAt=Date.now();wlPersist();render();
+  toast(r.ticker+' skipped until tomorrow',function(){r.skip='';r.updatedAt=Date.now();wlPersist();render()});
+};
+ACT.wlunskip=function(b){var r=wl.rows.find(function(x){return x.id===b.dataset.id});if(!r)return;r.skip='';r.updatedAt=Date.now();wlPersist();render()};
 ACT.wlsave=function(){
   if(!downloads){toast("Downloads aren't available in this view");return}
-  var d=nyNow().date,mon=addDays(d,-((new Date(d+'T12:00:00').getDay()+6)%7));
-  var head=['Group','Ticker','Bias','Daily 8/21','At level?','Recent double break?','Last checked','Waiting for','A+'];
-  var lines=[head.join(',')].concat(wl.rows.map(function(r){return[r.group,r.ticker,r.bias,r.ema,r.at,r.db,r.checked,r.waiting,wlAplus(r)?'Yes':''].map(csvCell).join(',')}));
-  saveFile('watchlist-week-of-'+mon+'.csv','\ufeff'+lines.join('\r\n'));
+  var rows=wl.rows.filter(function(r){return!wlSkipped(r)&&wlAction(r)});
+  if(!rows.length){toast('Nothing at a level to save yet');return}
+  var d=nyNow().date;
+  var head=['Group','Ticker','Bias','Daily 8/21','At level?','Recent double break?','A+','Waiting for','After market notes'];
+  var lines=[head.join(',')].concat(rows.map(function(r){return[r.group,r.ticker,r.bias,r.ema,r.at,r.db,wlAplus(r)?'Yes':'',r.waiting,''].map(csvCell).join(',')}));
+  saveFile('watchlist-'+d+'.csv','\ufeff'+lines.join('\r\n'));
 };
 ACT.wladd=function(){var t=$('[data-wl=ntick]').value.trim().toUpperCase(),g=$('[data-wl=ngrp]').value.trim()||'Other';if(!t)return;if(wl.rows.some(function(x){return x.ticker===t})){toast(t+' is already on the list');return}var r=wlRow(g,t);r.updatedAt=Date.now();wl.rows.push(r);wl.rows.sort(function(a,b){return a.group.localeCompare(b.group)||a.ticker.localeCompare(b.ticker)});wlPersist();render()};
 ACT.wldel=function(b){var i=wl.rows.findIndex(function(x){return x.id===b.dataset.id});if(i<0)return;var r=wl.rows[i];if(!confirm('Are you sure you want to remove '+r.ticker+' from the watchlist?'))return;wl.rows.splice(i,1);wlPersist();render();toast(r.ticker+' removed',function(){wl.rows.splice(i,0,r);wlPersist();render()})};

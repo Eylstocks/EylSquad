@@ -881,7 +881,11 @@ function wlLoad(){
   if(wlLoaded)return;wlLoaded=true;
   dbGet('kv','watchlist').then(function(s){
     wl=s&&s.rows?{rows:s.rows,day:s.day||null,reset:s.reset||null}:wlDefault();
-    wlDailyReset();
+  }).catch(function(e){
+    console.error('Watchlist load failed',e);
+    wl=wlDefault();
+  }).then(function(){
+    try{wlDailyReset()}catch(e){console.error('Daily reset failed',e)}
     if(view.name==='watchlist')render();
   });
 }

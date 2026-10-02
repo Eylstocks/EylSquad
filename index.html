@@ -860,7 +860,7 @@ var wl=null,wlUI={f:'all'},wlT=null,wlLoaded=false;
 function wlRow(g,t){return{id:'r_'+t,group:g,ticker:t,bias:'',ema:'',levels:'',at:'',db:'',checked:'',waiting:'',skip:'',updatedAt:0}}
 function wlDefault(){return{rows:WL_DEF.map(function(p){return wlRow(p[0],p[1])}),day:null}}
 function wlAction(r){return r.at==='Yes'||r.at==='Approaching'}
-function wlAplus(r){return (r.bias==='Bullish'||r.bias==='Bearish') && r.db==='Yes' && (r.at==='Yes'||r.at==='Approaching')}
+function wlAplus(r){return r.db==='Yes' && (r.at==='Yes'||r.at==='Approaching')}
 function wlAge(r){return r.checked?daysBetween(r.checked,nyNow().date):null}
 function wlSkipped(r){return r.skip===nyNow().date}
 function wlClone(){return JSON.parse(JSON.stringify(wl))}
@@ -872,7 +872,7 @@ function wlDailyReset(){
   if(!wl)return;
   var today=nyNow().date;
   if(wl.reset&&wl.reset!==today){
-    wl.rows.forEach(function(r){r.bias='';r.ema='';r.at='';r.db='';r.waiting='';r.updatedAt=Date.now()});
+    wl.rows.forEach(function(r){r.ema='';r.at='';r.db='';r.waiting='';r.updatedAt=Date.now()});
     wl.reset=today;wlPersist();
     if(view.name==='watchlist')render();
   }else if(!wl.reset){wl.reset=today;wlPersist()}
@@ -916,16 +916,16 @@ VIEWS.watchlist=function(){
   var h='<div class="top"><div><h1>Watchlist</h1><p class="sub">'+nAct+' at a level or breaking · '+nStale+' not checked in 3+ days'+(skipped.length?' · '+skipped.length+' skipped today':'')+'</p></div><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button class="btn primary" data-act="wlsave">Save today\'s list</button></div></div>';
   h+='<div class="panel" style="padding:10px 18px;margin-bottom:14px">'+wlDayRow('Any major news?','news',day)+wlDayRow('Upcoming earnings?','earn',day)+'</div>';
   h+='<div class="seg" style="margin-bottom:10px" role="group" aria-label="Filter">'+[['all','All ('+active.length+')'],['today','Today\'s list ('+nAct+')'],['neglected','Neglected ('+nStale+')'],['skipped','Skipped ('+skipped.length+')']].map(function(c){return'<button class="chip'+(wlUI.f===c[0]?' on':'')+'" data-act="wlfilter" data-v="'+c[0]+'">'+c[1]+'</button>'}).join('')+'</div>';
-  h+='<div class="panel tablewrap"><table class="tbl wl"><thead><tr><th>Ticker</th><th>Bias</th><th>Daily 8/21</th><th>At level?</th><th>Recent double break?</th><th>Checked</th><th>Waiting for</th><th></th></tr></thead><tbody>';
+  h+='<div class="panel tablewrap"><table class="tbl wl"><thead><tr><th>Ticker</th><th>Daily 8/21</th><th>At level?</th><th>Recent double break?</th><th>Checked</th><th>Waiting for</th><th></th></tr></thead><tbody>';
   var lastG=null;
   list.forEach(function(r){
-    if(wlUI.f!=='neglected'&&r.group!==lastG){lastG=r.group;h+='<tr class="gh"><td colspan="8">'+esc(r.group)+'</td></tr>'}
+    if(wlUI.f!=='neglected'&&r.group!==lastG){lastG=r.group;h+='<tr class="gh"><td colspan="7">'+esc(r.group)+'</td></tr>'}
     var acts=wlUI.f==='skipped'
       ?'<button class="btn sm" data-act="wlunskip" data-id="'+r.id+'">Bring back</button>'
       :'<button class="btn sm" data-act="wlskip" data-id="'+r.id+'" title="Hide for today. Comes back tomorrow." aria-label="Skip '+esc(r.ticker)+' for today">Skip</button> <button class="icon" data-act="wldel" data-id="'+r.id+'" aria-label="Remove '+esc(r.ticker)+'">'+ICON.trash+'</button>';
-    h+='<tr><td class="sym">'+(wlAction(r)?'<span style="color:var(--accent)" title="At a level or breaking">●</span> ':'')+esc(r.ticker)+(wlAplus(r)?' <span class="pill win">A+</span>':'')+'</td><td>'+wlSel(r,'bias',WL_BIAS)+'</td><td>'+wlSel(r,'ema',WL_EMA)+'</td><td>'+wlSel(r,'at',WL_AT)+'</td><td>'+wlSel(r,'db',WL_DB)+'</td><td>'+wlChecked(r)+'</td><td>'+wlTxt(r,'waiting','wt')+'</td><td style="text-align:right;white-space:nowrap">'+acts+'</td></tr>';
+    h+='<tr><td class="sym">'+(wlAction(r)?'<span style="color:var(--accent)" title="At a level or breaking">●</span> ':'')+esc(r.ticker)+(wlAplus(r)?' <span class="pill win">A+</span>':'')+'</td><td>'+wlSel(r,'ema',WL_EMA)+'</td><td>'+wlSel(r,'at',WL_AT)+'</td><td>'+wlSel(r,'db',WL_DB)+'</td><td>'+wlChecked(r)+'</td><td>'+wlTxt(r,'waiting','wt')+'</td><td style="text-align:right;white-space:nowrap">'+acts+'</td></tr>';
   });
-  if(!list.length)h+='<tr><td colspan="8" class="mut" style="text-align:center;padding:24px">'+(wlUI.f==='skipped'?'Nothing skipped today.':'Nothing here.')+'</td></tr>';
+  if(!list.length)h+='<tr><td colspan="7" class="mut" style="text-align:center;padding:24px">'+(wlUI.f==='skipped'?'Nothing skipped today.':'Nothing here.')+'</td></tr>';
   h+='</tbody></table></div>';
   var gs=Array.from(new Set(wl.rows.map(function(r){return r.group})));
   h+='<datalist id="wlgroups">'+gs.map(function(g){return'<option value="'+esc(g)+'">'}).join('')+'</datalist><div class="fbar" style="margin-top:12px"><input data-wl="ntick" placeholder="Ticker" aria-label="New ticker" style="text-transform:uppercase"><input data-wl="ngrp" list="wlgroups" placeholder="Group" aria-label="Group"><button class="btn sm" data-act="wladd">Add ticker</button></div>';
@@ -1102,7 +1102,7 @@ ACT.wldel=function(b){var i=wl.rows.findIndex(function(x){return x.id===b.datase
       }
     };
   </script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+ <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
 <script>
 (function(){
   function fill(hex){return{type:'pattern',pattern:'solid',fgColor:{argb:'FF'+hex}}}
@@ -1119,51 +1119,55 @@ ACT.wldel=function(b){var i=wl.rows.findIndex(function(x){return x.id===b.datase
 
     var wb=new ExcelJS.Workbook();
     var ws=wb.addWorksheet('Watchlist '+md(d).replace('/','-'));
-    ws.columns=[{width:14},{width:12},{width:12},{width:14},{width:12},{width:16},{width:7},{width:36},{width:48}];
+    
 
     /* header block */
-    ws.mergeCells('A1:I1');
+    ws.mergeCells('A1:H1');
     var t=ws.getCell('A1');t.value='Watchlist · '+fmtDate(d);t.font={bold:true,size:16,color:{argb:'FF16262B'}};ws.getRow(1).height=28;
     function lab(addr,txt){var c=ws.getCell(addr);c.value=txt;c.font={bold:true};c.fill=fill('E3E8E0');c.alignment={vertical:'middle'};box(c)}
     function val(addr,v,hex){var c=ws.getCell(addr);c.value=v;c.alignment={vertical:'middle',wrapText:true};if(hex)c.fill=fill(hex);box(c);return c}
     lab('A2','Major news');
     var nv=val('B2',day.news||'Not checked');nv.font={bold:true,color:{argb:day.news==='Yes'?'FFB23A32':'FF4B5B5F'}};
-    ws.mergeCells('C2:I2');val('C2',day.newsNote||'');
+    ws.mergeCells('C2:H2');val('C2',day.newsNote||'');
     lab('A3','After-hours notes');
-    ws.mergeCells('B3:I3');val('B3','','F2E7C7');ws.getRow(3).height=52;
+    ws.mergeCells('B3:H3');val('B3','','F2E7C7');ws.getRow(3).height=52;
     lab('A4','Earnings');
     var ev=val('B4',day.earn||'Not checked');ev.font={bold:true,color:{argb:day.earn==='Yes'?'FFB23A32':'FF4B5B5F'}};
-    ws.mergeCells('C4:I4');val('C4',day.earnNote||'');
+    ws.mergeCells('C4:H4');val('C4',day.earnNote||'');
     ws.getRow(2).height=24;ws.getRow(4).height=24;
 
     /* ticker table starts on row 6 */
-    var head=['Group','Ticker','Bias','Daily 8/21','At level?','Recent double break?','A+','Waiting for','After market notes'];
-    var body=rows.map(function(r){return[r.group,r.ticker,r.bias,r.ema,r.at,r.db,wlAplus(r)?'A+':'',r.waiting,'']});
-    if(!body.length)body=[['','','','','','','','','']];
+    var head=['Group','Ticker','Daily 8/21','At level?','Recent double break?','A+','Waiting for','After market notes'];
+    var body=rows.map(function(r){return[r.group,r.ticker,r.ema,r.at,r.db,wlAplus(r)?'A+':'',r.waiting,'']});
+    if(!body.length)body=[['','','','','','','','']];
     ws.addTable({name:'WatchlistTable',ref:'A6',headerRow:true,totalsRow:false,style:{theme:'TableStyleMedium2',showRowStripes:true},columns:head.map(function(n){return{name:n,filterButton:true}}),rows:body});
-    ws.getRow(6).height=22;
+    ws.getRow(6).height=22; var mins=[18,10,12,12,24,6,18,40], maxs=[22,14,16,14,26,8,60,60];
+head.forEach(function(h,i){
+  var w=h.length+4;
+  body.forEach(function(r){var l=String(r[i]==null?'':r[i]).length+2;if(l>w)w=l});
+  ws.getColumn(i+1).width=Math.min(Math.max(w,mins[i]),maxs[i]);
+});
 
-    var red={font:{bold:true,color:{argb:'FFB23A32'}},bg:'F5DBD7'},green={font:{bold:true,color:{argb:'FF1E7A4C'}},bg:'D9EEDF'},yel={font:{bold:true,color:{argb:'FF83630F'}},bg:'F2E7C7'};
+    var green={font:{bold:true,color:{argb:'FF1E7A4C'}},bg:'D9EEDF'},yel={font:{bold:true,color:{argb:'FF83630F'}},bg:'F2E7C7'};
     body.forEach(function(row,i){
       var rn=7+i;ws.getRow(rn).height=rows.length?30:20;
-      for(var c=1;c<=9;c++){var cell=ws.getCell(rn,c);cell.alignment={vertical:'middle',wrapText:c>=8};cell.border={top:thin,left:thin,bottom:thin,right:thin}}
+      for(var c=1;c<=8;c++){var cell=ws.getCell(rn,c);cell.alignment={vertical:'middle',horizontal:(c>=3&&c<=6)?'center':'left',wrapText:c>=7};cell.border={top:thin,left:thin,bottom:thin,right:thin}}
       ws.getCell(rn,2).font={bold:true};
       function tint(col,s){var c=ws.getCell(rn,col);c.font=s.font;c.fill=fill(s.bg)}
       var r=rows[i];if(!r)return;
-      if(r.bias==='Bullish')tint(3,green);else if(r.bias==='Bearish')tint(3,red);
-      if(r.at==='Yes'||r.at==='Approaching')tint(5,yel);
-      if(r.db==='Yes')tint(6,green);
-      if(wlAplus(r))tint(7,green);
-      if(/^Testing/.test(r.ema))tint(4,yel);
+      if(/^Testing/.test(r.ema))tint(3,yel);
+      if(r.at==='Yes'||r.at==='Approaching')tint(4,yel);
+      if(r.db==='Yes')tint(5,green);
+      if(wlAplus(r))tint(6,green);
     });
 
     /* screenshots area (you paste images in by hand) */
     var s0=7+body.length+2;
-    ws.mergeCells(s0,1,s0,9);
+    ws.mergeCells(s0,1,s0,8);
     var sl=ws.getCell(s0,1);sl.value='Charts / screenshots';sl.font={bold:true,size:13};sl.fill=fill('E3E8E0');
-    ws.mergeCells(s0+1,1,s0+20,9);
+    ws.mergeCells(s0+1,1,s0+20,8);
     var sb=ws.getCell(s0+1,1);sb.value='Paste screenshots here';sb.font={italic:true,color:{argb:'FF7C898B'}};sb.alignment={vertical:'top',horizontal:'left'};
-    for(var rr=s0+1;rr<=s0+20;rr++)for(var cc=1;cc<=9;cc++){ws.getCell(rr,cc).border={top:rr===s0+1?thin:undefined,bottom:rr===s0+20?thin:undefined,left:cc===1?thin:undefined,right:cc===9?thin:undefined}}
+    for(var rr=s0+1;rr<=s0+20;rr++)for(var cc=1;cc<=8;cc++){ws.getCell(rr,cc).border={top:rr===s0+1?thin:undefined,bottom:rr===s0+20?thin:undefined,left:cc===1?thin:undefined,right:cc===8?thin:undefined}}
 
     ws.views=[{state:'frozen',ySplit:6,showGridLines:false}];
     ws.pageSetup={orientation:'landscape',fitToPage:true,fitToWidth:1,fitToHeight:0};

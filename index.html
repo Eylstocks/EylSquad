@@ -868,10 +868,24 @@ function wlClone(){return JSON.parse(JSON.stringify(wl))}
 function wlDay(){var t=nyNow().date;if(!wl.day||wl.day.date!==t)wl.day={date:t,news:'',newsNote:'',earn:'',earnNote:''};return wl.day}
 /* saves to this browser only */
 function wlPersist(){clearTimeout(wlT);wlT=setTimeout(function(){dbPut('kv','watchlist',wlClone()).catch(function(){})},400)}
+function wlDailyReset(){
+  if(!wl)return;
+  var today=nyNow().date;
+  if(wl.reset&&wl.reset!==today){
+    wl.rows.forEach(function(r){r.bias='';r.ema='';r.at='';r.db='';r.waiting='';r.updatedAt=Date.now()});
+    wl.reset=today;wlPersist();
+    if(view.name==='watchlist')render();
+  }else if(!wl.reset){wl.reset=today;wlPersist()}
+}
 function wlLoad(){
   if(wlLoaded)return;wlLoaded=true;
-  dbGet('kv','watchlist').then(function(s){wl=s&&s.rows?{rows:s.rows,day:s.day||null}:wlDefault();if(view.name==='watchlist')render()});
+  dbGet('kv','watchlist').then(function(s){
+    wl=s&&s.rows?{rows:s.rows,day:s.day||null,reset:s.reset||null}:wlDefault();
+    wlDailyReset();
+    if(view.name==='watchlist')render();
+  });
 }
+document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible')wlDailyReset()});
 function wlSel(r,f,opts){
   var v=r[f]||'';
   var col=v==='Bullish'?'var(--win)':v==='Bearish'?'var(--loss)':(f==='db'&&v==='Yes')?'var(--win)':((f==='at'&&(v==='Yes'||v==='Approaching'))||/^Testing/.test(v))?'var(--warn)':'inherit';

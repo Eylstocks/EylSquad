@@ -1159,8 +1159,7 @@ head.forEach(function(h,i){
       ws.getCell(rn,2).font={bold:true};
       function tint(col,s){var c=ws.getCell(rn,col);c.font=s.font;c.fill=fill(s.bg)}
       var r=rows[i];if(!r)return;
-      if(/^Testing/.test(r.ema))tint(3,yel);
-     if(r.at==='Yes'||r.at==='Approaching')tint(3,yel);
+      if(r.at==='Yes'||r.at==='Approaching')tint(3,yel);
 if(r.fvg==='Yes')tint(4,green);
 if(r.db==='Yes')tint(5,green);
       if(wlAplus(r))tint(6,green);

@@ -855,9 +855,9 @@ if(typeof document!=='undefined'&&document.getElementById('root'))boot();
 <script>
 /* ===== Watchlist page (device only, no cloud) ===== */
 var WL_DEF=[['Market','SPY'],['Market','QQQ'],['Market','IWM'],['Market','TLT'],['Market','VIX'],['Leveraged','TQQQ/SQQQ'],['Mega-cap','AAPL'],['Mega-cap','AMZN'],['Mega-cap','GOOG/GOOGL'],['Mega-cap','META'],['Mega-cap','MSFT'],['Mega-cap','NFLX'],['Mega-cap','TSLA'],['Semis','AMD'],['Semis','INTC'],['Semis','MU'],['Semis','NVDA'],['Crypto','COIN'],['Crypto','GBTC'],['Crypto','MARA'],['Crypto','MSTR'],['Crypto','RIOT'],['Energy','XLE'],['Energy','XOM'],['China','BABA']];
-var WL_BIAS=['Bullish','Bearish','Neutral'],WL_EMA=['Above both','Testing 8','Testing 21','Between','Below both'],WL_AT=['Yes','Approaching','No'],WL_DB=['Yes','No'];
+var WL_AT=['Yes','Approaching','No'],WL_FVG=['Yes','No'],WL_DB=['Yes','No'];
 var wl=null,wlUI={f:'all'},wlT=null,wlLoaded=false;
-function wlRow(g,t){return{id:'r_'+t,group:g,ticker:t,bias:'',ema:'',levels:'',at:'',db:'',checked:'',waiting:'',skip:'',updatedAt:0}}
+function wlRow(g,t){return{id:'r_'+t,group:g,ticker:t,bias:'',levels:'',at:'',fvg:'',db:'',checked:'',waiting:'',skip:'',updatedAt:0}}
 function wlDefault(){return{rows:WL_DEF.map(function(p){return wlRow(p[0],p[1])}),day:null}}
 function wlAction(r){return r.at==='Yes'||r.at==='Approaching'}
 function wlAplus(r){return r.db==='Yes' && (r.at==='Yes'||r.at==='Approaching')}
@@ -872,7 +872,7 @@ function wlDailyReset(){
   if(!wl)return;
   var today=nyNow().date;
   if(wl.reset&&wl.reset!==today){
-    wl.rows.forEach(function(r){r.ema='';r.at='';r.db='';r.waiting='';r.updatedAt=Date.now()});
+    wl.rows.forEach(function(r){r.at='';r.fvg='';r.db='';r.waiting='';r.updatedAt=Date.now()});
     wl.reset=today;wlPersist();
     if(view.name==='watchlist')render();
   }else if(!wl.reset){wl.reset=today;wlPersist()}
@@ -892,7 +892,7 @@ function wlLoad(){
 document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible')wlDailyReset()});
 function wlSel(r,f,opts){
   var v=r[f]||'';
-  var col=v==='Bullish'?'var(--win)':v==='Bearish'?'var(--loss)':(f==='db'&&v==='Yes')?'var(--win)':((f==='at'&&(v==='Yes'||v==='Approaching'))||/^Testing/.test(v))?'var(--warn)':'inherit';
+  var col=v==='Bullish'?'var(--win)':v==='Bearish'?'var(--loss)':((f==='db'||f==='fvg')&&v==='Yes')?'var(--win)':((f==='at'&&(v==='Yes'||v==='Approaching'))||/^Testing/.test(v))?'var(--warn)':'inherit';
   return'<select data-wl="'+f+'" data-id="'+r.id+'" aria-label="'+f+' for '+esc(r.ticker)+'" style="color:'+col+'"><option value=""></option>'+opts.map(function(o){return'<option'+(o===v?' selected':'')+'>'+o+'</option>'}).join('')+'</select>';
 }
 function wlTxt(r,f,cls){return'<input class="'+cls+'" data-wl="'+f+'" data-id="'+r.id+'" value="'+esc(r[f])+'" aria-label="'+f+' for '+esc(r.ticker)+'" autocomplete="off">'}
@@ -920,14 +920,14 @@ VIEWS.watchlist=function(){
   var h='<div class="top"><div><h1>Watchlist</h1><p class="sub">'+nAct+' at a level or breaking · '+nStale+' not checked in 3+ days'+(skipped.length?' · '+skipped.length+' skipped today':'')+'</p></div><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button class="btn primary" data-act="wlsave">Save today\'s list</button></div></div>';
   h+='<div class="panel" style="padding:10px 18px;margin-bottom:14px">'+wlDayRow('Any major news?','news',day)+wlDayRow('Upcoming earnings?','earn',day)+'</div>';
   h+='<div class="seg" style="margin-bottom:10px" role="group" aria-label="Filter">'+[['all','All ('+active.length+')'],['today','Today\'s list ('+nAct+')'],['neglected','Neglected ('+nStale+')'],['skipped','Skipped ('+skipped.length+')']].map(function(c){return'<button class="chip'+(wlUI.f===c[0]?' on':'')+'" data-act="wlfilter" data-v="'+c[0]+'">'+c[1]+'</button>'}).join('')+'</div>';
-  h+='<div class="panel tablewrap"><table class="tbl wl"><thead><tr><th>Ticker</th><th>Daily 8/21</th><th>At level?</th><th>Recent double break?</th><th>Checked</th><th>Waiting for</th><th></th></tr></thead><tbody>';
+  h+='<div class="panel tablewrap"><table class="tbl wl"><thead><tr><th>Ticker</th><th>At level?</th><th>FVG present?</th><th>Recent double break?</th><th>Checked</th><th>Waiting for</th><th></th></tr></thead><tbody>';
   var lastG=null;
   list.forEach(function(r){
     if(wlUI.f!=='neglected'&&r.group!==lastG){lastG=r.group;h+='<tr class="gh"><td colspan="7">'+esc(r.group)+'</td></tr>'}
     var acts=wlUI.f==='skipped'
       ?'<button class="btn sm" data-act="wlunskip" data-id="'+r.id+'">Bring back</button>'
       :'<button class="btn sm" data-act="wlskip" data-id="'+r.id+'" title="Hide for today. Comes back tomorrow." aria-label="Skip '+esc(r.ticker)+' for today">Skip</button> <button class="icon" data-act="wldel" data-id="'+r.id+'" aria-label="Remove '+esc(r.ticker)+'">'+ICON.trash+'</button>';
-    h+='<tr><td class="sym">'+(wlAction(r)?'<span style="color:var(--accent)" title="At a level or breaking">●</span> ':'')+esc(r.ticker)+(wlAplus(r)?' <span class="pill win">A+</span>':'')+'</td><td>'+wlSel(r,'ema',WL_EMA)+'</td><td>'+wlSel(r,'at',WL_AT)+'</td><td>'+wlSel(r,'db',WL_DB)+'</td><td>'+wlChecked(r)+'</td><td>'+wlTxt(r,'waiting','wt')+'</td><td style="text-align:right;white-space:nowrap">'+acts+'</td></tr>';
+    h+='<tr><td class="sym">'+(wlAction(r)?'<span style="color:var(--accent)" title="At a level or breaking">●</span> ':'')+esc(r.ticker)+(wlAplus(r)?' <span class="pill win">A+</span>':'')+'</td><td>'+wlSel(r,'at',WL_AT)+'</td><td>'+wlSel(r,'fvg',WL_FVG)+'</td><td>'+wlSel(r,'db',WL_DB)+'</td><td>'+wlChecked(r)+'</td><td>'+wlTxt(r,'waiting','wt')+'</td><td style="text-align:right;white-space:nowrap">'+acts+'</td></tr>';
   });
   if(!list.length)h+='<tr><td colspan="7" class="mut" style="text-align:center;padding:24px">'+(wlUI.f==='skipped'?'Nothing skipped today.':'Nothing here.')+'</td></tr>';
   h+='</tbody></table></div>';
@@ -966,14 +966,14 @@ ACT.wlsave=function(){
   var day=wlDay(),rows=wl.rows.filter(function(r){return!wlSkipped(r)&&wlAction(r)});
   if(!rows.length&&!day.news&&!day.earn){toast('Nothing at a level to save yet');return}
   var d=nyNow().date;
-  var head=['Group','Ticker','Bias','Daily 8/21','At level?','Recent double break?','A+','Waiting for','After market notes'];
+  var head=['Group','Ticker','Bias','At level?','FVG present?','Recent double break?','A+','Waiting for','After market notes'];
   var lines=[
     ['Date',d].map(csvCell).join(','),
     ['Major news?',day.news||'Not checked',day.newsNote].map(csvCell).join(','),
     ['Upcoming earnings?',day.earn||'Not checked',day.earnNote].map(csvCell).join(','),
     '',
     head.join(',')
-  ].concat(rows.map(function(r){return[r.group,r.ticker,r.bias,r.ema,r.at,r.db,wlAplus(r)?'Yes':'',r.waiting,''].map(csvCell).join(',')}));
+  ].concat(rows.map(function(r){return[r.group,r.ticker,r.bias,r.at,r.fvg,r.db,wlAplus(r)?'Yes':'',r.waiting,''].map(csvCell).join(',')}));
   saveFile('watchlist-'+d+'.csv','\ufeff'+lines.join('\r\n'));
 };
 ACT.wladd=function(){var t=$('[data-wl=ntick]').value.trim().toUpperCase(),g=$('[data-wl=ngrp]').value.trim()||'Other';if(!t)return;if(wl.rows.some(function(x){return x.ticker===t})){toast(t+' is already on the list');return}var r=wlRow(g,t);r.updatedAt=Date.now();wl.rows.push(r);wl.rows.sort(function(a,b){return a.group.localeCompare(b.group)||a.ticker.localeCompare(b.ticker)});wlPersist();render()};
@@ -1141,11 +1141,11 @@ ACT.wldel=function(b){var i=wl.rows.findIndex(function(x){return x.id===b.datase
     ws.getRow(2).height=24;ws.getRow(4).height=24;
 
     /* ticker table starts on row 6 */
-    var head=['Group','Ticker','Daily 8/21','At level?','Recent double break?','A+','Waiting for','After market notes'];
-    var body=rows.map(function(r){return[r.group,r.ticker,r.ema,r.at,r.db,wlAplus(r)?'A+':'',r.waiting,'']});
+    var head=['Group','Ticker','At level?','FVG present?','Recent double break?','A+','Waiting for','After market notes'];
+    var body=rows.map(function(r){return[r.group,r.ticker,r.at,r.fvg,r.db,wlAplus(r)?'A+':'',r.waiting,'']});
     if(!body.length)body=[['','','','','','','','']];
     ws.addTable({name:'WatchlistTable',ref:'A6',headerRow:true,totalsRow:false,style:{theme:'TableStyleMedium2',showRowStripes:true},columns:head.map(function(n){return{name:n,filterButton:true}}),rows:body});
-    ws.getRow(6).height=22; var mins=[18,10,12,12,24,6,18,40], maxs=[22,14,16,14,26,8,60,60];
+    ws.getRow(6).height=22; var mins=[18,10,12,14,24,6,18,40], maxs=[22,14,14,16,26,8,60,60];;
 head.forEach(function(h,i){
   var w=h.length+4;
   body.forEach(function(r){var l=String(r[i]==null?'':r[i]).length+2;if(l>w)w=l});
@@ -1160,8 +1160,9 @@ head.forEach(function(h,i){
       function tint(col,s){var c=ws.getCell(rn,col);c.font=s.font;c.fill=fill(s.bg)}
       var r=rows[i];if(!r)return;
       if(/^Testing/.test(r.ema))tint(3,yel);
-      if(r.at==='Yes'||r.at==='Approaching')tint(4,yel);
-      if(r.db==='Yes')tint(5,green);
+     if(r.at==='Yes'||r.at==='Approaching')tint(3,yel);
+if(r.fvg==='Yes')tint(4,green);
+if(r.db==='Yes')tint(5,green);
       if(wlAplus(r))tint(6,green);
     });
 

@@ -854,7 +854,7 @@ if(typeof document!=='undefined'&&document.getElementById('root'))boot();
 </script>
 <script>
 /* ===== Watchlist page (device only, no cloud) ===== */
-var WL_DEF=[['Market','SPY'],['Market','QQQ'],['Market','IWM'],['Market','TLT'],['Market','VIX'],['Leveraged','TQQQ/SQQQ'],['Mega-cap','AAPL'],['Mega-cap','AMZN'],['Mega-cap','GOOG/GOOGL'],['Mega-cap','META'],['Mega-cap','MSFT'],['Mega-cap','NFLX'],['Mega-cap','TSLA'],['Semis','AMD'],['Semis','INTC'],['Semis','MU'],['Semis','NVDA'],['Crypto','COIN'],['Crypto','GBTC'],['Crypto','MARA'],['Crypto','MSTR'],['Crypto','RIOT'],['Energy','XLE'],['Energy','XOM'],['China','BABA']];
+var WL_DEF=[['Market','SPY'],['Market','QQQ'],['Market','IWM'],['Market','TLT'],['Market','VIX'],['Leveraged','SQQQ'],['Mega-cap','AAPL'],['Mega-cap','AMZN'],['Mega-cap','GOOGL'],['Mega-cap','META'],['Mega-cap','MSFT'],['Mega-cap','NFLX'],['Mega-cap','TSLA'],['Semis','AMD'],['Semis','INTC'],['Semis','MU'],['Semis','NVDA'],['Crypto','COIN'],['Crypto','GBTC'],['Crypto','MARA'],['Crypto','MSTR'],['Crypto','RIOT'],['Energy','XLE'],['Energy','XOM'],['China','BABA']];
 var WL_AT=['Yes','Approaching','No'],WL_FVG=['Yes','No'],WL_DB=['Yes','No'];
 var wl=null,wlUI={f:'all'},wlT=null,wlLoaded=false;
 function wlRow(g,t){return{id:'r_'+t,group:g,ticker:t,bias:'',levels:'',at:'',fvg:'',db:'',checked:'',waiting:'',skip:'',updatedAt:0}}

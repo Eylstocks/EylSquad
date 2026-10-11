@@ -854,7 +854,7 @@ if(typeof document!=='undefined'&&document.getElementById('root'))boot();
 </script>
 <script>
 /* ===== Watchlist page (device only, no cloud) ===== */
-var WL_DEF=[['Market','SPY'],['Market','QQQ'],['Market','IWM'],['Market','TLT'],['Market','VIX'],['Leveraged','SQQQ'],['Mega-cap','AAPL'],['Mega-cap','AMZN'],['Mega-cap','GOOGL'],['Mega-cap','META'],['Mega-cap','MSFT'],['Mega-cap','NFLX'],['Mega-cap','TSLA'],['Semis','AMD'],['Semis','INTC'],['Semis','MU'],['Semis','NVDA'],['Crypto','COIN'],['Crypto','GBTC'],['Crypto','MARA'],['Crypto','MSTR'],['Crypto','RIOT'],['Energy','XLE'],['Finance','XLF'],['China','BABA']];
+var WL_DEF=[['Market','SPY'],['Market','QQQ'],['Market','IWM'],['Market','TLT'],['Market','VIX'],['Leveraged','SQQQ'],['Mega-cap','AAPL'],['Mega-cap','AMZN'],['Mega-cap','GOOGL'],['Mega-cap','META'],['Mega-cap','MSFT'],['Mega-cap','NFLX'],['Mega-cap','TSLA'],['Semis','AMD'],['Semis','INTC'],['Semis','MU'],['Semis','NVDA'],['Crypto','COIN'],['Crypto','GBTC'],['Crypto','MARA'],['Crypto','MSTR'],['Crypto','RIOT'],['Energy','XLE'],['Energy','XOM'],['China','BABA']];
 var WL_AT=['Yes','Approaching','No'],WL_FVG=['Yes','No'],WL_DB=['Yes','No'];
 var wl=null,wlUI={f:'all'},wlT=null,wlLoaded=false;
 function wlRow(g,t){return{id:'r_'+t,group:g,ticker:t,bias:'',levels:'',at:'',fvg:'',db:'',checked:'',waiting:'',skip:'',updatedAt:0}}
@@ -1122,12 +1122,12 @@ ACT.wldel=function(b){var i=wl.rows.findIndex(function(x){return x.id===b.datase
     if(!rows.length&&!day.news&&!day.earn){toast('Nothing at a level to save yet');return}
 
     var wb=new ExcelJS.Workbook();
-    var ws=wb.addWorksheet('Watchlist '+md(d).replace(/\//g,'-'));
+    var ws=wb.addWorksheet('Watchlist '+md(d).replace('/','-'));
     
 
     /* header block */
     ws.mergeCells('A1:H1');
-    var t=ws.getCell('A1');var dateObj=new Date(d+'T12:00:00');var weekday=dateObj.toLocaleDateString('en-US',{weekday:'long'});t.value='Watchlist · '+fmtDate(d)+' - '+weekday;t.font={bold:true,size:16,color:{argb:'FF16262B'}};ws.getRow(1).height=28;
+    var t=ws.getCell('A1');t.value='Watchlist · '+fmtDate(d);t.font={bold:true,size:16,color:{argb:'FF16262B'}};ws.getRow(1).height=28;
     function lab(addr,txt){var c=ws.getCell(addr);c.value=txt;c.font={bold:true};c.fill=fill('E3E8E0');c.alignment={vertical:'middle'};box(c)}
     function val(addr,v,hex){var c=ws.getCell(addr);c.value=v;c.alignment={vertical:'middle',wrapText:true};if(hex)c.fill=fill(hex);box(c);return c}
     lab('A2','Major news');
@@ -1176,7 +1176,12 @@ if(r.db==='Yes')tint(5,green);
     ws.views=[{state:'frozen',ySplit:6,showGridLines:false}];
     ws.pageSetup={orientation:'landscape',fitToPage:true,fitToWidth:1,fitToHeight:0};
 
-   try{var buf=await wb.xlsx.writeBuffer();var name='watchlist-'+d+'.xlsx';await downloads.save({filename:name,data:buf});toast('Saved '+name);}catch(e){console.error('Excel export failed:',e);toast("Excel export failed: "+(e.message||e));}
+    try{
+      var buf=await wb.xlsx.writeBuffer();
+      var name='watchlist-'+d+'.xlsx';
+      downloads.save({filename:name,data:buf}).then(function(){toast('Saved '+name)}).catch(function(e){if(!e||e.code!=='declined')toast("Couldn't save the file")});
+    }catch(e){console.error(e);toast("Couldn't build the Excel file")}
+  }
 
   document.addEventListener('click',function(e){
     var b=e.target.closest&&e.target.closest('[data-act="wlsave"]');

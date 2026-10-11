@@ -1185,7 +1185,7 @@ if(r.db==='Yes')tint(5,green);
 
     try{
       var buf=await wb.xlsx.writeBuffer();
-      var name='watchlist-'+d+'.xlsx';
+      var name='watchlist-'+watchlistDate(d)+'.xlsx';
       downloads.save({filename:name,data:buf}).then(function(){toast('Saved '+name)}).catch(function(e){if(!e||e.code!=='declined')toast("Couldn't save the file")});
     }catch(e){console.error(e);toast("Couldn't build the Excel file")}
   }

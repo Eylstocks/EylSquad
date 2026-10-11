@@ -1127,7 +1127,8 @@ ACT.wldel=function(b){var i=wl.rows.findIndex(function(x){return x.id===b.datase
 
     /* header block */
     ws.mergeCells('A1:H1');
-    var t=ws.getCell('A1');t.value='Watchlist · '+fmtDate(d);t.font={bold:true,size:16,color:{argb:'FF16262B'}};ws.getRow(1).height=28;
+    var t=ws.getCell('A1');t.value = 'Watchlist · ' + fmtDate(d) + ' - ' +
+    d.toLocaleDateString('en-US', { weekday: 'long' });t.font={bold:true,size:16,color:{argb:'FF16262B'}};ws.getRow(1).height=28;
     function lab(addr,txt){var c=ws.getCell(addr);c.value=txt;c.font={bold:true};c.fill=fill('E3E8E0');c.alignment={vertical:'middle'};box(c)}
     function val(addr,v,hex){var c=ws.getCell(addr);c.value=v;c.alignment={vertical:'middle',wrapText:true};if(hex)c.fill=fill(hex);box(c);return c}
     lab('A2','Major news');

@@ -1113,6 +1113,13 @@ ACT.wldel=function(b){var i=wl.rows.findIndex(function(x){return x.id===b.datase
   var thin={style:'thin',color:{argb:'FFB9C2B7'}};
   function box(c){c.border={top:thin,left:thin,bottom:thin,right:thin}}
 
+  function watchlistDate(d){
+  var p=d.split('-');
+  var date=new Date(Number(p[0]),Number(p[1])-1,Number(p[2]));
+  var day=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][date.getDay()];
+  return (p[1]+'/'+p[2]+'/'+p[0].slice(-2))+' - '+day;
+}
+
   async function exportXlsx(){
     if(!downloads){toast("Downloads aren't available in this view");return}
     if(typeof ExcelJS==='undefined'){toast("The Excel library didn't load");return}
@@ -1127,7 +1134,7 @@ ACT.wldel=function(b){var i=wl.rows.findIndex(function(x){return x.id===b.datase
 
     /* header block */
     ws.mergeCells('A1:H1');
-    var t=ws.getCell('A1');t.value='Watchlist · '+fmtDate(d);t.font={bold:true,size:16,color:{argb:'FF16262B'}};ws.getRow(1).height=28;
+    var t=ws.getCell('A1');t.value='Watchlist · '+watchlistDate(d);t.font={bold:true,size:16,color:{argb:'FF16262B'}};ws.getRow(1).height=28;
     function lab(addr,txt){var c=ws.getCell(addr);c.value=txt;c.font={bold:true};c.fill=fill('E3E8E0');c.alignment={vertical:'middle'};box(c)}
     function val(addr,v,hex){var c=ws.getCell(addr);c.value=v;c.alignment={vertical:'middle',wrapText:true};if(hex)c.fill=fill(hex);box(c);return c}
     lab('A2','Major news');

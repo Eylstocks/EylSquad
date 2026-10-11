@@ -1176,7 +1176,7 @@ if(r.db==='Yes')tint(5,green);
     ws.views=[{state:'frozen',ySplit:6,showGridLines:false}];
     ws.pageSetup={orientation:'landscape',fitToPage:true,fitToWidth:1,fitToHeight:0};
 
-    try{var buf=await wb.xlsx.writeBuffer();var name='watchlist-'+d+'.xlsx';await downloads.save({filename:name,data:buf});toast('Saved '+name);}catch(e){console.error('Excel export failed:',e);toast("Excel export failed: "+(e.message||e));}
+   try{var buf=await wb.xlsx.writeBuffer();var name='watchlist-'+d+'.xlsx';await downloads.save({filename:name,data:buf});toast('Saved '+name);}catch(e){console.error('Excel export failed:',e);toast("Excel export failed: "+(e.message||e));}
 
   document.addEventListener('click',function(e){
     var b=e.target.closest&&e.target.closest('[data-act="wlsave"]');

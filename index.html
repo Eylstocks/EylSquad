@@ -853,131 +853,334 @@ function boot(){
 if(typeof document!=='undefined'&&document.getElementById('root'))boot();
 </script>
 <script>
-/* ===== Watchlist page (device only, no cloud) ===== */
+<script>
+/* ===== Watchlist page: review panel, multi-day setups, cloud sync ===== */
+(function(){
+document.head.insertAdjacentHTML('beforeend','<style>'+
+'main:has(.wlwrap){max-width:1500px}'+
+'.wlwrap{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:16px;align-items:start}'+
+'.wlpanel{position:sticky;top:16px;padding:16px 18px}'+
+'.wlph{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}'+
+'.wltick{font-size:24px;margin:0;letter-spacing:-.01em}'+
+'.wll{margin:14px 0 6px}label.wll{display:block}'+
+'.wlbtns{display:flex;gap:8px;margin-top:8px}.wlbtns .btn{flex:1}'+
+'.wlt tr[data-wlsel]{cursor:pointer}.wlt tr[data-wlsel]:hover td{background:var(--hover)}'+
+'.wlt tr.wlon td{background:var(--hover)}.wlt tr.wlon td:first-child{box-shadow:inset 3px 0 0 var(--accent)}'+
+'.wlt td.wlwait{max-width:200px;overflow:hidden;text-overflow:ellipsis}'+
+'.wlt .gh td{font-size:12.5px;font-weight:600;color:var(--muted);padding-top:14px;background:var(--panel)}'+
+'kbd{font:11px/1.4 ui-monospace,Consolas,monospace;border:1px solid var(--line2);border-radius:4px;padding:0 4px;margin-left:6px;color:var(--muted)}'+
+'.chip.on kbd,.btn.primary kbd{color:inherit;border-color:currentColor}'+
+'.chip:disabled,.chip:disabled:hover{opacity:.4;cursor:default;border-color:var(--line2)}'+
+'@media (max-width:1000px){.wlwrap{grid-template-columns:minmax(0,1fr)}.wlpanel{position:static}}'+
+'</style>');
+
 var WL_DEF=[['Market','SPY'],['Market','QQQ'],['Market','IWM'],['Market','TLT'],['Market','VIX'],['Leveraged','SQQQ'],['Mega-cap','AAPL'],['Mega-cap','AMZN'],['Mega-cap','GOOGL'],['Mega-cap','META'],['Mega-cap','MSFT'],['Mega-cap','NFLX'],['Mega-cap','TSLA'],['Semis','AMD'],['Semis','INTC'],['Semis','MU'],['Semis','NVDA'],['Crypto','COIN'],['Crypto','GBTC'],['Crypto','MARA'],['Crypto','MSTR'],['Crypto','RIOT'],['Energy','XLE'],['Finance','XLF'],['China','BABA']];
-var WL_AT=['Yes','Approaching','No'],WL_FVG=['Yes','No'],WL_DB=['Yes','No'];
-var wl=null,wlUI={f:'all'},wlT=null,wlLoaded=false;
-function wlRow(g,t){return{id:'r_'+t,group:g,ticker:t,bias:'',levels:'',at:'',fvg:'',db:'',checked:'',waiting:'',skip:'',updatedAt:0}}
-function wlDefault(){return{rows:WL_DEF.map(function(p){return wlRow(p[0],p[1])}),day:null}}
-function wlAction(r){return r.at==='Yes'||r.at==='Approaching'}
-function wlAplus(r){return r.db==='Yes' && (r.at==='Yes'||r.at==='Approaching')}
-function wlAge(r){return r.checked?daysBetween(r.checked,nyNow().date):null}
-function wlSkipped(r){return r.skip===nyNow().date}
-function wlClone(){return JSON.parse(JSON.stringify(wl))}
-/* today's news / earnings check: starts blank every new day (New York date) */
-function wlDay(){var t=nyNow().date;if(!wl.day||wl.day.date!==t)wl.day={date:t,news:'',newsNote:'',earn:'',earnNote:''};return wl.day}
-/* saves to this browser only */
-function wlPersist(){clearTimeout(wlT);wlT=setTimeout(function(){dbPut('kv','watchlist',wlClone()).catch(function(){})},400)}
-function wlDailyReset(){
-  if(!wl)return;
-  var today=nyNow().date;
-  if(wl.reset&&wl.reset!==today){
-    wl.rows.forEach(function(r){r.at='';r.fvg='';r.db='';r.waiting='';r.updatedAt=Date.now()});
-    wl.reset=today;wlPersist();
-    if(view.name==='watchlist')render();
-  }else if(!wl.reset){wl.reset=today;wlPersist()}
+var WL_DIRS=[['up','Uptrend',0,'1'],['down','Downtrend',1,'2'],['rup','Reversal ↑',0,'3'],['rdown','Reversal ↓',1,'4']];
+var WL_DBLS=[['Yes','Yes',0,''],['No','No',0,'']];
+var WL_ATS=[['No','No',0,'5'],['Near','Near',0,'6'],['Yes','Yes',0,'7'],['Fail','Fail',1,'8']];
+var WL_DIRL={up:'Uptrend',down:'Downtrend',rup:'Reversal ↑',rdown:'Reversal ↓'};
+var wl=null,wlReady=null,wlUI={f:'all',sel:null,fail:null},wlT=null,wlCloud='';
+var wlFsP=null,wlSyncBusy=false,wlSyncAgain=false,wlSyncT=null;
+
+/* ---------- data ---------- */
+function today(){return nyNow().date}
+function wlRow(g,t){return{id:'r_'+t,group:g,ticker:t,dir:'',dbl:'',level:'',at:'',waiting:'',checked:'',pick:'',pickDate:'',updatedAt:0}}
+function wlSort(a,b){return a.group.localeCompare(b.group)||a.ticker.localeCompare(b.ticker)}
+function wlDefault(){return{rows:WL_DEF.map(function(p){return wlRow(p[0],p[1])}),day:null,purged:{}}}
+function wlNorm(r){
+  var at=r.at==='Approaching'?'Near':r.at;if(['No','Near','Yes','Fail'].indexOf(at)<0)at='';
+  var dbl=r.dbl!=null?r.dbl:r.db;if(dbl!=='Yes'&&dbl!=='No')dbl='';
+  var pick=(r.pick==='add'||r.pick==='pass')?r.pick:'',pd=r.pickDate||'';
+  if(!pick&&r.skip){pick='pass';pd=r.skip}
+  return{id:r.id||('r_'+r.ticker),group:r.group||'Other',ticker:String(r.ticker),dir:WL_DIRL[r.dir]?r.dir:'',dbl:dbl,level:r.level==null?'':String(r.level),at:at,waiting:r.waiting||'',checked:r.checked||'',pick:pick,pickDate:pd,updatedAt:r.updatedAt||0};
 }
-function wlLoad(){
-  if(wlLoaded)return;wlLoaded=true;
-  dbGet('kv','watchlist').then(function(s){
-    wl=s&&s.rows?{rows:s.rows,day:s.day||null,reset:s.reset||null}:wlDefault();
-  }).catch(function(e){
-    console.error('Watchlist load failed',e);
-    wl=wlDefault();
-  }).then(function(){
-    try{wlDailyReset()}catch(e){console.error('Daily reset failed',e)}
-    if(view.name==='watchlist')render();
+function wlFromSaved(s){if(!s||!Array.isArray(s.rows))return wlDefault();return{rows:s.rows.filter(function(r){return r&&r.ticker}).map(wlNorm),day:s.day||null,purged:s.purged||{}}}
+function wlClone(){return JSON.parse(JSON.stringify(wl))}
+function wlCanAt(r){return r.dbl==='Yes'&&String(r.level||'').trim()!==''}
+function wlAplus(r){return wlCanAt(r)&&r.at==='Yes'}
+function wlPick(r){return r.pickDate===today()?r.pick:''}
+function wlCur(){return(wl&&wl.rows.find(function(x){return x.id===wlUI.sel}))||null}
+function wlDay(){var t=today();if(!wl.day||wl.day.date!==t)wl.day={date:t,news:'',newsNote:'',earn:'',earnNote:'',updatedAt:0};return wl.day}
+function wlList(){
+  var t=today();
+  return wl.rows.filter(function(r){
+    var p=wlPick(r);
+    if(wlUI.f==='skipped')return p==='pass';
+    if(p==='pass')return false;
+    if(wlUI.f==='today')return p==='add';
+    if(wlUI.f==='unchecked')return r.checked!==t;
+    return true;
   });
 }
-document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible')wlDailyReset()});
-function wlSel(r,f,opts){
-  var v=r[f]||'';
-  var col=v==='Bullish'?'var(--win)':v==='Bearish'?'var(--loss)':((f==='db'||f==='fvg')&&v==='Yes')?'var(--win)':((f==='at'&&(v==='Yes'||v==='Approaching'))||/^Testing/.test(v))?'var(--warn)':'inherit';
-  return'<select data-wl="'+f+'" data-id="'+r.id+'" aria-label="'+f+' for '+esc(r.ticker)+'" style="color:'+col+'"><option value=""></option>'+opts.map(function(o){return'<option'+(o===v?' selected':'')+'>'+o+'</option>'}).join('')+'</select>';
+function wlTyping(){var a=document.activeElement;return!!(a&&a.matches&&a.matches('[data-wlf],[data-wlday],[data-wl]'))}
+function wlEnsure(){
+  if(wlReady)return wlReady;
+  if(storageOK&&!idb)return Promise.resolve();
+  wlReady=dbGet('kv','watchlist').then(function(s){wl=wlFromSaved(s)},function(e){console.error('Watchlist load failed',e);wl=wlDefault()}).then(function(){if(view.name==='watchlist')render();wlSync()});
+  return wlReady;
 }
-function wlTxt(r,f,cls){return'<input class="'+cls+'" data-wl="'+f+'" data-id="'+r.id+'" value="'+esc(r[f])+'" aria-label="'+f+' for '+esc(r.ticker)+'" autocomplete="off">'}
-function wlChecked(r){
-  var a=wlAge(r),cls=a==null?'even':a===0?'win':a>=7?'loss':a>=3?'warn':'even';
-  return'<span class="pill '+cls+'">'+(a==null?'Never':md(r.checked))+'</span> <button class="icon" data-act="wlcheck" data-id="'+r.id+'" title="Mark checked today" aria-label="Mark '+esc(r.ticker)+' checked today">✓</button>';
+function wlPersist(){clearTimeout(wlT);wlT=setTimeout(function(){dbPut('kv','watchlist',wlClone()).catch(function(){});wlSchedule(1500)},400)}
+function wlScroll(){var tr=document.querySelector('tr.wlon');if(tr)tr.scrollIntoView({block:'nearest'})}
+
+/* ---------- cloud sync (users/{uid}/watchlist/state) ---------- */
+function wlFs(){return wlFsP||(wlFsP=import('https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js'))}
+function wlSchedule(ms){clearTimeout(wlSyncT);wlSyncT=setTimeout(wlSync,ms)}
+function wlSetCloud(t){wlCloud=t;var el=document.getElementById('wlcloud');if(el)el.textContent=t?' · '+t:''}
+function wlBody(b){b=b||{};return{rows:(b.rows||[]).filter(function(r){return r&&r.ticker}).map(wlNorm).sort(function(x,y){return x.id.localeCompare(y.id)}),day:b.day||null,purged:b.purged||{}}}
+function wlPickDay(a,b){if(!a)return b||null;if(!b)return a;if(a.date!==b.date)return a.date>b.date?a:b;return(b.updatedAt||0)>(a.updatedAt||0)?b:a}
+function wlMerge(a,b){
+  b=b||{};var purged={},m={};
+  [b.purged||{},a.purged||{}].forEach(function(p){Object.keys(p).forEach(function(k){purged[k]=Math.max(purged[k]||0,p[k]||0)})});
+  [a.rows||[],(b.rows||[]).filter(function(r){return r&&r.ticker}).map(wlNorm)].forEach(function(list){list.forEach(function(r){
+    if(purged[r.id]&&purged[r.id]>=(r.updatedAt||0))return;
+    var c=m[r.id];if(!c||(r.updatedAt||0)>(c.updatedAt||0))m[r.id]=r;
+  })});
+  return{rows:Object.keys(m).map(function(k){return m[k]}),day:wlPickDay(a.day,b.day),purged:purged};
+}
+async function wlSync(){
+  if(!wl)return;
+  var u=window.auth&&window.auth.currentUser;
+  if(!u||!window.db){wlSetCloud(window.auth?'Not signed in, saved on this PC':'');return}
+  if(wlSyncBusy){wlSyncAgain=true;return}
+  wlSyncBusy=true;
+  try{
+    var f=await wlFs(),ref=f.doc(window.db,'users',u.uid,'watchlist','state');
+    var snap=await f.getDoc(ref),remote=snap.exists()?snap.data():null;
+    var m=wlMerge(wl,remote),merged=canon(wlBody(m));
+    if(canon(wlBody(wl))!==merged){wl.rows=m.rows;wl.day=m.day;wl.purged=m.purged;await dbPut('kv','watchlist',wlClone());if(view.name==='watchlist'&&!wlTyping())render()}
+    if(!remote||canon(wlBody(remote))!==merged){var body=wlBody(m);body.updatedAt=new Date().toISOString();await f.setDoc(ref,JSON.parse(JSON.stringify(body)))}
+    wlSetCloud('Synced '+new Date().toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}));
+  }catch(e){console.error('Watchlist sync failed (saved on this PC):',e);wlSetCloud('Sync failed, saved on this PC')}
+  wlSyncBusy=false;if(wlSyncAgain){wlSyncAgain=false;wlSync()}
+}
+(function(){var orig=window.syncNow;if(typeof orig!=='function')return;window.syncNow=function(){var p=orig.apply(this,arguments);if(wl)wlSchedule(0);else wlEnsure();return p}})();
+
+/* ---------- view ---------- */
+function wlDirPill(d){if(!d)return'<span class="mut">—</span>';return'<span class="pill '+(d==='up'?'win':d==='down'?'loss':'warn')+'">'+WL_DIRL[d]+'</span>'}
+function wlAtPill(r){if(!wlCanAt(r)||!r.at)return'<span class="mut">—</span>';return'<span class="pill '+{No:'even',Near:'warn',Yes:'win',Fail:'loss'}[r.at]+'">'+(r.at==='Fail'?'Failed':r.at)+'</span>'}
+function wlTr(r){
+  var t=today(),st=wlPick(r),fresh=r.checked===t;
+  return'<tr data-wlsel="'+r.id+'"'+(wlUI.sel===r.id?' class="wlon"':'')+'>'+
+    '<td class="sym">'+esc(r.ticker)+'</td>'+
+    '<td>'+wlDirPill(r.dir)+'</td>'+
+    '<td>'+(r.dbl==='Yes'?'<span class="win" style="font-weight:600">Yes</span>':r.dbl==='No'?'<span class="mut">No</span>':'<span class="mut">—</span>')+'</td>'+
+    '<td class="n">'+(wlCanAt(r)?esc(r.level):'<span class="mut">—</span>')+'</td>'+
+    '<td>'+wlAtPill(r)+'</td>'+
+    '<td class="wlwait" title="'+esc(r.waiting)+'">'+(r.waiting?esc(r.waiting):'<span class="mut">—</span>')+'</td>'+
+    '<td>'+(wlAplus(r)?(fresh?'<span class="pill win">A+</span>':'<span class="pill even" title="Not checked today">A+?</span>'):'')+'</td>'+
+    '<td>'+(fresh?'<span class="pill win">✓ Today</span>':'<span class="pill loss">'+(r.checked?md(r.checked):'Never')+'</span>')+'</td>'+
+    '<td>'+(st==='add'?'<span class="pill win">Added</span>':st==='pass'?'<span class="pill even">Passed</span>':'')+'</td>'+
+    '<td style="text-align:right"><button class="icon" data-act="wldel" data-id="'+r.id+'" aria-label="Remove '+esc(r.ticker)+'">'+ICON.trash+'</button></td></tr>';
+}
+function wlPatch(r){
+  var tr=document.querySelector('tr[data-wlsel="'+r.id+'"]');if(tr)tr.outerHTML=wlTr(r);
+  var can=wlCanAt(r);
+  document.querySelectorAll('[data-act="wlset"][data-wf="at"]').forEach(function(b){b.disabled=!can});
+  var h=document.getElementById('wlathint');if(h)h.hidden=can;
+}
+function wlChips(r,f,opts,dis){
+  return'<div class="seg">'+opts.map(function(o){var on=r[f]===o[0];
+    return'<button type="button" class="chip'+(o[2]?' bad':'')+(on?' on':'')+'" data-act="wlset" data-wf="'+f+'" data-v="'+o[0]+'" aria-pressed="'+on+'"'+(dis?' disabled':'')+'>'+o[1]+(o[3]?'<kbd>'+o[3]+'</kbd>':'')+'</button>'}).join('')+'</div>';
+}
+function wlPanel(){
+  var r=wlCur();
+  if(!r)return'<div class="panel wlpanel"><p class="mut">Nothing to review here.</p></div>';
+  var t=today(),st=wlPick(r),can=wlCanAt(r);
+  var h='<div class="panel wlpanel"><div class="wlph"><div><p class="k">'+esc(r.group)+'</p><h2 class="wltick">'+esc(r.ticker)+'</h2></div>'+(wlAplus(r)?'<span class="pill '+(r.checked===t?'win':'even')+'" style="font-size:14px">A+</span>':'')+'</div>';
+  h+='<p class="k wll">Direction</p>'+wlChips(r,'dir',WL_DIRS);
+  h+='<p class="k wll">DBL break <kbd>D</kbd></p>'+wlChips(r,'dbl',WL_DBLS);
+  h+='<label class="f wll"><span>Continuation level <kbd>L</kbd></span><input data-wlf="level" inputmode="decimal" autocomplete="off" value="'+esc(r.level)+'" placeholder="'+(r.dbl==='Yes'?'e.g. 182.50':'Set DBL break to Yes first')+'"'+(r.dbl==='Yes'?'':' disabled')+'></label>';
+  h+='<p class="k wll">At level</p>'+wlChips(r,'at',WL_ATS,!can)+'<p class="hint" id="wlathint"'+(can?' hidden':'')+'>Needs DBL break = Yes and a continuation level.</p>';
+  if(wlUI.fail===r.id&&r.at==='Fail')h+='<div class="callout bad" style="margin:10px 0 0"><span>Setup failed. Clear DBL break, level and At level?</span><span><button class="btn sm" data-act="wlfailclear">Clear setup</button> <button class="btn sm" data-act="wlfailkeep">Keep</button></span></div>';
+  h+='<label class="f wll"><span>Waiting for <kbd>W</kbd></span><input data-wlf="waiting" autocomplete="off" value="'+esc(r.waiting)+'" placeholder="What has to happen first"></label>';
+  h+='<p class="k wll">'+(r.checked===t?'<span class="win">Checked today</span>':'Last checked: '+(r.checked?fmtDate(r.checked):'never'))+(st==='add'?' · on today\'s list':st==='pass'?' · passed for today':'')+'</p>';
+  h+='<div class="wlbtns"><button class="btn primary" data-act="wldecide" data-v="add"'+(st==='add'?' disabled':'')+'>'+(st==='add'?'Added ✓':'Add to today\'s list')+'<kbd>A</kbd></button><button class="btn" data-act="wldecide" data-v="pass"'+(st==='pass'?' disabled':'')+'>'+(st==='pass'?'Passed ✓':'Pass')+'<kbd>P</kbd></button></div>';
+  if(st)h+='<button class="btn link" data-act="wlclearpick" style="margin-top:6px">Undo today\'s decision</button>';
+  return h+'</div>';
 }
 function wlDayRow(label,k,d){
   var v=d[k];
   return'<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:5px 0"><span style="min-width:150px;font-weight:500">'+label+'</span><div class="seg">'+['Yes','No'].map(function(o){return'<button class="chip'+(v===o?' on':'')+'" data-act="wldayset" data-k="'+k+'" data-v="'+o+'" aria-pressed="'+(v===o)+'">'+o+'</button>'}).join('')+'</div>'+(v===''?'<span class="pill warn">Not checked yet</span>':'')+(v==='Yes'?'<input data-wlday="'+k+'Note" value="'+esc(d[k+'Note'])+'" placeholder="What is it? e.g. FOMC 2pm" aria-label="'+label+' note" style="flex:1 1 220px;max-width:420px" autocomplete="off">':'')+'</div>';
 }
 VIEWS.watchlist=function(){
-  wlLoad();
-  if(!wl)return'<div class="top"><h1>Watchlist</h1></div><p class="mut">Loading…</p>';
-  var day=wlDay();
-  var skipped=wl.rows.filter(wlSkipped),active=wl.rows.filter(function(r){return!wlSkipped(r)});
-  var stale=function(r){var a=wlAge(r);return a==null||a>=3};
-  var nAct=active.filter(wlAction).length,nStale=active.filter(stale).length,list;
-  if(wlUI.f==='skipped')list=skipped.slice();
-  else{
-    list=active.slice();
-    if(wlUI.f==='today')list=list.filter(wlAction);
-    if(wlUI.f==='neglected')list=list.filter(stale).sort(function(a,b){return(a.checked||'').localeCompare(b.checked||'')});
-  }
-  var h='<div class="top"><div><h1>Watchlist</h1><p class="sub">'+nAct+' at a level or breaking · '+nStale+' not checked in 3+ days'+(skipped.length?' · '+skipped.length+' skipped today':'')+'</p></div><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button class="btn primary" data-act="wlsave">Save today\'s list</button></div></div>';
+  wlEnsure();
+  if(!wl)return'<div class="top"><div><h1>Watchlist</h1></div></div><p class="mut">Loading…</p>';
+  var t=today(),day=wlDay(),list=wlList(),N=wl.rows.length;
+  if(!list.some(function(r){return r.id===wlUI.sel})){var u=list.find(function(r){return r.checked!==t})||list[0];wlUI.sel=u?u.id:null}
+  var nChk=wl.rows.filter(function(r){return r.checked===t}).length,
+      nAdd=wl.rows.filter(function(r){return wlPick(r)==='add'}).length,
+      nPass=wl.rows.filter(function(r){return wlPick(r)==='pass'}).length,
+      nAp=wl.rows.filter(function(r){return wlAplus(r)&&r.checked===t}).length;
+  var h='<div class="top"><div><h1>Watchlist</h1><p class="sub">'+(N&&nChk===N?'<span class="win">All '+N+' checked today ✓</span>':nChk+' of '+N+' checked today')+' · '+nAdd+' on today\'s list'+(nAp?' · <span class="win">'+nAp+' A+</span>':'')+'<span id="wlcloud">'+(wlCloud?' · '+esc(wlCloud):'')+'</span></p></div><button class="btn primary" data-act="wlsave">Save today\'s list</button></div>';
   h+='<div class="panel" style="padding:10px 18px;margin-bottom:14px">'+wlDayRow('Any major news?','news',day)+wlDayRow('Upcoming earnings?','earn',day)+'</div>';
-  h+='<div class="seg" style="margin-bottom:10px" role="group" aria-label="Filter">'+[['all','All ('+active.length+')'],['today','Today\'s list ('+nAct+')'],['neglected','Neglected ('+nStale+')'],['skipped','Skipped ('+skipped.length+')']].map(function(c){return'<button class="chip'+(wlUI.f===c[0]?' on':'')+'" data-act="wlfilter" data-v="'+c[0]+'">'+c[1]+'</button>'}).join('')+'</div>';
-  h+='<div class="panel tablewrap"><table class="tbl wl"><thead><tr><th>Ticker</th><th>At level?</th><th>FVG present?</th><th>Recent double break?</th><th>Checked</th><th>Waiting for</th><th></th></tr></thead><tbody>';
-  var lastG=null;
-  list.forEach(function(r){
-    if(wlUI.f!=='neglected'&&r.group!==lastG){lastG=r.group;h+='<tr class="gh"><td colspan="7">'+esc(r.group)+'</td></tr>'}
-    var acts=wlUI.f==='skipped'
-      ?'<button class="btn sm" data-act="wlunskip" data-id="'+r.id+'">Bring back</button>'
-      :'<button class="btn sm" data-act="wlskip" data-id="'+r.id+'" title="Hide for today. Comes back tomorrow." aria-label="Skip '+esc(r.ticker)+' for today">Skip</button> <button class="icon" data-act="wldel" data-id="'+r.id+'" aria-label="Remove '+esc(r.ticker)+'">'+ICON.trash+'</button>';
-    h+='<tr><td class="sym">'+(wlAction(r)?'<span style="color:var(--accent)" title="At a level or breaking">●</span> ':'')+esc(r.ticker)+(wlAplus(r)?' <span class="pill win">A+</span>':'')+'</td><td>'+wlSel(r,'at',WL_AT)+'</td><td>'+wlSel(r,'fvg',WL_FVG)+'</td><td>'+wlSel(r,'db',WL_DB)+'</td><td>'+wlChecked(r)+'</td><td>'+wlTxt(r,'waiting','wt')+'</td><td style="text-align:right;white-space:nowrap">'+acts+'</td></tr>';
-  });
-  if(!list.length)h+='<tr><td colspan="7" class="mut" style="text-align:center;padding:24px">'+(wlUI.f==='skipped'?'Nothing skipped today.':'Nothing here.')+'</td></tr>';
-  h+='</tbody></table></div>';
+  h+='<div class="seg" style="margin-bottom:10px" role="group" aria-label="Filter">'+[['all','All',N-nPass],['today','Today\'s list',nAdd],['unchecked','Not checked',N-nChk],['skipped','Skipped',nPass]].map(function(c){return'<button class="chip'+(wlUI.f===c[0]?' on':'')+'" data-act="wlfilter" data-v="'+c[0]+'">'+c[1]+' ('+c[2]+')</button>'}).join('')+'</div>';
+  var tb='<div class="panel tablewrap"><table class="tbl wlt"><thead><tr><th>Ticker</th><th>Direction</th><th>DBL break</th><th class="n">Cont. level</th><th>At level</th><th>Waiting for</th><th>A+</th><th>Checked</th><th>Today</th><th></th></tr></thead><tbody>',lastG=null;
+  list.forEach(function(r){if(r.group!==lastG){lastG=r.group;tb+='<tr class="gh"><td colspan="10">'+esc(r.group)+'</td></tr>'}tb+=wlTr(r)});
+  if(!list.length)tb+='<tr><td colspan="10" class="mut" style="text-align:center;padding:24px">'+({today:'Nothing added yet. Pick a ticker and press Add.',unchecked:'Everything is checked for today ✓',skipped:'Nothing passed today.'}[wlUI.f]||'No tickers yet.')+'</td></tr>';
+  tb+='</tbody></table></div>';
   var gs=Array.from(new Set(wl.rows.map(function(r){return r.group})));
-  h+='<datalist id="wlgroups">'+gs.map(function(g){return'<option value="'+esc(g)+'">'}).join('')+'</datalist><div class="fbar" style="margin-top:12px"><input data-wl="ntick" placeholder="Ticker" aria-label="New ticker" style="text-transform:uppercase"><input data-wl="ngrp" list="wlgroups" placeholder="Group" aria-label="Group"><button class="btn sm" data-act="wladd">Add ticker</button></div>';
-  return h+'<p class="hint">Today\'s list = at a level or a new high/low. Skip hides a ticker until tomorrow. The news and earnings questions reset every day. Colors on the date: green today, yellow 3+ days, red 7+ days. The sheet is kept in this browser; Save today\'s list downloads a CSV (opens in Excel) with only the tickers at a level.</p>';
+  tb+='<datalist id="wlgroups">'+gs.map(function(g){return'<option value="'+esc(g)+'">'}).join('')+'</datalist><div class="fbar" style="margin-top:12px"><input data-wl="ntick" placeholder="Ticker" aria-label="New ticker" style="text-transform:uppercase"><input data-wl="ngrp" list="wlgroups" placeholder="Group" aria-label="Group"><button class="btn sm" data-act="wladd">Add ticker</button></div>';
+  h+='<div class="wlwrap"><div>'+tb+'</div>'+wlPanel()+'</div>';
+  return h+'<p class="hint">Keys: ↑ ↓ move · 1–4 direction · D DBL break · L level · 5–8 at level · W waiting for · A add · P pass · Enter or Esc leaves a box. Everything carries over day to day; Checked and Add/Pass start fresh each morning. A+ = at the continuation level and checked today.</p>';
 };
-document.addEventListener('change',function(e){
-  var t=e.target,f=t.dataset&&t.dataset.wl;if(!f)return;
-  if(f==='ntick'||f==='ngrp'||!wl)return;
-  var r=wl.rows.find(function(x){return x.id===t.dataset.id});if(!r)return;
-  r[f]=t.value;r.updatedAt=Date.now();wlPersist();
-  if(t.tagName==='SELECT')render();
+
+/* ---------- actions ---------- */
+function wlSetField(r,f,v){
+  if(f==='at'&&!wlCanAt(r))return;
+  r[f]=r[f]===v?'':v;
+  if(f==='dbl'&&r.dbl!=='Yes')r.at='';
+  if(f==='at')wlUI.fail=r.at==='Fail'?r.id:null;
+  r.updatedAt=Date.now();wlPersist();render();
+}
+function wlDecide(kind){
+  var r=wlCur();if(!r||wlPick(r)===kind)return;
+  var t=today(),before=wlList(),idx=before.findIndex(function(x){return x.id===r.id}),prev={pick:r.pick,pickDate:r.pickDate,checked:r.checked};
+  r.pick=kind;r.pickDate=t;r.checked=t;r.updatedAt=Date.now();wlUI.fail=null;
+  var nxt=null;for(var i=1;i<=before.length;i++){var c=before[(idx+i)%before.length];if(c.id!==r.id&&c.checked!==t){nxt=c;break}}
+  wlUI.sel=nxt?nxt.id:null;
+  wlPersist();render();wlScroll();
+  toast(r.ticker+(kind==='add'?' added to today\'s list':' passed for today'),function(){r.pick=prev.pick;r.pickDate=prev.pickDate;r.checked=prev.checked;r.updatedAt=Date.now();wlUI.sel=r.id;wlPersist();render()});
+}
+function wlMove(d){var list=wlList();if(!list.length)return;var i=list.findIndex(function(x){return x.id===wlUI.sel});wlUI.sel=list[(i+d+list.length)%list.length].id;wlUI.fail=null;render();wlScroll()}
+
+ACT.wlset=function(b){var r=wlCur();if(r&&!b.disabled)wlSetField(r,b.dataset.wf,b.dataset.v)};
+ACT.wldecide=function(b){wlDecide(b.dataset.v)};
+ACT.wlclearpick=function(){var r=wlCur();if(!r)return;r.pick='';r.pickDate='';r.updatedAt=Date.now();wlPersist();render()};
+ACT.wlfailclear=function(){var r=wlCur();if(!r)return;r.dbl='No';r.level='';r.at='';wlUI.fail=null;r.updatedAt=Date.now();wlPersist();render()};
+ACT.wlfailkeep=function(){wlUI.fail=null;render()};
+ACT.wlfilter=function(b){wlUI.f=b.dataset.v;wlUI.sel=null;render()};
+ACT.wldayset=function(b){var d=wlDay(),k=b.dataset.k,v=b.dataset.v;d[k]=d[k]===v?'':v;if(d[k]!=='Yes')d[k+'Note']='';d.updatedAt=Date.now();wlPersist();render()};
+ACT.wladd=function(){
+  var t=$('[data-wl=ntick]').value.trim().toUpperCase(),g=$('[data-wl=ngrp]').value.trim()||'Other';if(!t)return;
+  if(wl.rows.some(function(x){return x.ticker===t})){toast(t+' is already on the list');return}
+  var r=wlRow(g,t);r.updatedAt=Date.now();if(wl.purged)delete wl.purged[r.id];
+  wl.rows.push(r);wl.rows.sort(wlSort);wlUI.sel=r.id;wlPersist();render();
+};
+ACT.wldel=function(b){
+  var i=wl.rows.findIndex(function(x){return x.id===b.dataset.id});if(i<0)return;var r=wl.rows[i];
+  if(!confirm('Remove '+r.ticker+' from the watchlist?'))return;
+  wl.rows.splice(i,1);wl.purged=wl.purged||{};wl.purged[r.id]=Date.now();if(wlUI.sel===r.id)wlUI.sel=null;wlPersist();render();
+  toast(r.ticker+' removed',function(){delete wl.purged[r.id];r.updatedAt=Date.now();wl.rows.splice(i,0,r);wlPersist();render()});
+};
+
+/* ---------- events ---------- */
+document.addEventListener('click',function(e){
+  if(view.name!=='watchlist'||!wl)return;
+  if(e.target.closest('[data-act],input,button,a'))return;
+  var tr=e.target.closest('tr[data-wlsel]');if(!tr)return;
+  wlUI.sel=tr.dataset.wlsel;wlUI.fail=null;render();
 });
-/* news / earnings note: saves as you type, no re-render so typing isn't interrupted */
 document.addEventListener('input',function(e){
-  var k=e.target.dataset&&e.target.dataset.wlday;if(!k||!wl)return;
-  wlDay()[k]=e.target.value;wlPersist();
+  var d=e.target.dataset;if(!d||!wl)return;
+  if(d.wlday){var dy=wlDay();dy[d.wlday]=e.target.value;dy.updatedAt=Date.now();wlPersist();return}
+  if(d.wlf){var r=wlCur();if(!r)return;r[d.wlf]=e.target.value;r.updatedAt=Date.now();wlPersist();wlPatch(r)}
 });
-ACT.wldayset=function(b){
-  var d=wlDay(),k=b.dataset.k,v=b.dataset.v;
-  d[k]=d[k]===v?'':v;
-  if(d[k]!=='Yes')d[k+'Note']='';
-  wlPersist();render();
+document.addEventListener('keydown',function(e){
+  if(view.name!=='watchlist'||!wl||e.ctrlKey||e.metaKey||e.altKey)return;
+  var tg=e.target,typing=tg&&(tg.tagName==='INPUT'||tg.tagName==='TEXTAREA'||tg.tagName==='SELECT');
+  if(typing){
+    if(e.key==='Escape'||(e.key==='Enter'&&tg.dataset.wlf)){tg.blur();e.preventDefault()}
+    else if(e.key==='Enter'&&(tg.dataset.wl==='ntick'||tg.dataset.wl==='ngrp')){e.preventDefault();ACT.wladd()}
+    return;
+  }
+  if(!$('#lb').hidden)return;
+  var r=wlCur(),k=e.key.toLowerCase(),map={'1':['dir','up'],'2':['dir','down'],'3':['dir','rup'],'4':['dir','rdown'],'5':['at','No'],'6':['at','Near'],'7':['at','Yes'],'8':['at','Fail']};
+  if(e.key==='ArrowDown'||k==='j')wlMove(1);
+  else if(e.key==='ArrowUp'||k==='k')wlMove(-1);
+  else if(!r)return;
+  else if(map[k])wlSetField(r,map[k][0],map[k][1]);
+  else if(k==='d')wlSetField(r,'dbl',r.dbl==='Yes'?'No':'Yes');
+  else if(k==='l'){var li=$('[data-wlf=level]');if(li&&!li.disabled)li.focus()}
+  else if(k==='w'){var wi=$('[data-wlf=waiting]');if(wi)wi.focus()}
+  else if(k==='a')wlDecide('add');
+  else if(k==='p')wlDecide('pass');
+  else return;
+  e.preventDefault();
+});
+
+/* ---------- backup and restore now include the watchlist ---------- */
+ACT.backup=function(){
+  wlEnsure().then(function(){
+    var ids=[];state.trades.forEach(function(t){ids=ids.concat(t.shots||[])});
+    return Promise.all(ids.map(function(id){return dbGet('img',id).then(function(b){return b?blobToDataURL(b).then(function(u){return[id,u]}):null})}));
+  }).then(function(list){
+    var imgs={};(list||[]).forEach(function(p){if(p)imgs[p[0]]=p[1]});
+    state.settings.lastBackup=nyNow().date;save();
+    saveFile('trade-journal-backup-'+nyNow().date+'.json',JSON.stringify({app:'trade-journal',version:1,exportedAt:new Date().toISOString(),state:state,images:imgs,watchlist:wl?wlClone():null}));render();
+  });
 };
-ACT.wlfilter=function(b){wlUI.f=b.dataset.v;render()};
-ACT.wlcheck=function(b){var r=wl.rows.find(function(x){return x.id===b.dataset.id});if(!r)return;r.checked=nyNow().date;r.updatedAt=Date.now();wlPersist();render()};
-ACT.wlskip=function(b){
-  var r=wl.rows.find(function(x){return x.id===b.dataset.id});if(!r)return;
-  r.skip=nyNow().date;r.updatedAt=Date.now();wlPersist();render();
-  toast(r.ticker+' skipped until tomorrow',function(){r.skip='';r.updatedAt=Date.now();wlPersist();render()});
+var wlOrigRestore=ACT.restoreyes;
+ACT.restoreyes=function(){
+  var p=pendingRestore,w=p&&p.watchlist;
+  if(w&&Array.isArray(w.rows)){var now=Date.now();wl=wlFromSaved(w);wl.rows.forEach(function(r){r.updatedAt=now});if(wl.day)wl.day.updatedAt=now;wlReady=Promise.resolve();wlPersist()}
+  wlOrigRestore();
 };
-ACT.wlunskip=function(b){var r=wl.rows.find(function(x){return x.id===b.dataset.id});if(!r)return;r.skip='';r.updatedAt=Date.now();wlPersist();render()};
-ACT.wlsave=function(){
+
+/* ---------- Excel export: tickers you added today, A+ first ---------- */
+function wlDayName(d){var p=d.split('-');return['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][new Date(+p[0],+p[1]-1,+p[2]).getDay()]}
+function wlTitleDate(d){var p=d.split('-');return p[1]+'/'+p[2]+'/'+p[0].slice(-2)+' - '+wlDayName(d)}
+async function wlExport(){
   if(!downloads){toast("Downloads aren't available in this view");return}
-  var day=wlDay(),rows=wl.rows.filter(function(r){return!wlSkipped(r)&&wlAction(r)});
-  if(!rows.length&&!day.news&&!day.earn){toast('Nothing at a level to save yet');return}
-  var d=nyNow().date;
-  var head=['Group','Ticker','Bias','At level?','FVG present?','Recent double break?','A+','Waiting for','After market notes'];
-  var lines=[
-    ['Date',d].map(csvCell).join(','),
-    ['Major news?',day.news||'Not checked',day.newsNote].map(csvCell).join(','),
-    ['Upcoming earnings?',day.earn||'Not checked',day.earnNote].map(csvCell).join(','),
-    '',
-    head.join(',')
-  ].concat(rows.map(function(r){return[r.group,r.ticker,r.bias,r.at,r.fvg,r.db,wlAplus(r)?'Yes':'',r.waiting,''].map(csvCell).join(',')}));
-  saveFile('watchlist-'+d+'.csv','\ufeff'+lines.join('\r\n'));
-};
-ACT.wladd=function(){var t=$('[data-wl=ntick]').value.trim().toUpperCase(),g=$('[data-wl=ngrp]').value.trim()||'Other';if(!t)return;if(wl.rows.some(function(x){return x.ticker===t})){toast(t+' is already on the list');return}var r=wlRow(g,t);r.updatedAt=Date.now();wl.rows.push(r);wl.rows.sort(function(a,b){return a.group.localeCompare(b.group)||a.ticker.localeCompare(b.ticker)});wlPersist();render()};
-ACT.wldel=function(b){var i=wl.rows.findIndex(function(x){return x.id===b.dataset.id});if(i<0)return;var r=wl.rows[i];if(!confirm('Are you sure you want to remove '+r.ticker+' from the watchlist?'))return;wl.rows.splice(i,1);wlPersist();render();toast(r.ticker+' removed',function(){wl.rows.splice(i,0,r);wlPersist();render()})};
+  if(typeof ExcelJS==='undefined'){toast("The Excel library didn't load");return}
+  await wlEnsure();if(!wl)return;
+  var day=wlDay(),d=today();
+  var rows=wl.rows.filter(function(r){return wlPick(r)==='add'});
+  rows.sort(function(a,b){return(wlAplus(b)?1:0)-(wlAplus(a)?1:0)});
+  if(!rows.length&&!day.news&&!day.earn){toast("Nothing on today's list yet. Add tickers first.");return}
+  function fill(hex){return{type:'pattern',pattern:'solid',fgColor:{argb:'FF'+hex}}}
+  var thin={style:'thin',color:{argb:'FFB9C2B7'}};
+  function box(c){c.border={top:thin,left:thin,bottom:thin,right:thin}}
+  var wb=new ExcelJS.Workbook(),ws=wb.addWorksheet('Watchlist '+md(d).replace('/','-'));
+  ws.mergeCells('A1:I1');
+  var t=ws.getCell('A1');t.value='Watchlist · '+wlTitleDate(d);t.font={bold:true,size:16,color:{argb:'FF16262B'}};ws.getRow(1).height=28;
+  function lab(a,txt){var c=ws.getCell(a);c.value=txt;c.font={bold:true};c.fill=fill('E3E8E0');c.alignment={vertical:'middle'};box(c)}
+  function val(a,v,hex){var c=ws.getCell(a);c.value=v;c.alignment={vertical:'middle',wrapText:true};if(hex)c.fill=fill(hex);box(c);return c}
+  lab('A2','Major news');
+  val('B2',day.news||'Not checked').font={bold:true,color:{argb:day.news==='Yes'?'FFB23A32':'FF4B5B5F'}};
+  ws.mergeCells('C2:I2');val('C2',day.newsNote||'');
+  lab('A3','After-hours notes');ws.mergeCells('B3:I3');val('B3','','F2E7C7');ws.getRow(3).height=52;
+  lab('A4','Earnings');
+  val('B4',day.earn||'Not checked').font={bold:true,color:{argb:day.earn==='Yes'?'FFB23A32':'FF4B5B5F'}};
+  ws.mergeCells('C4:I4');val('C4',day.earnNote||'');
+  ws.getRow(2).height=24;ws.getRow(4).height=24;
+
+  var head=['Group','Ticker','Direction','DBL break','Cont. level','At level','A+','Waiting for','After market notes'];
+  var body=rows.map(function(r){var lv=wlCanAt(r)?(isNaN(+r.level)?r.level:+r.level):'';return[r.group,r.ticker,WL_DIRL[r.dir]||'',r.dbl,lv,wlCanAt(r)?r.at:'',wlAplus(r)?'A+':'',r.waiting,'']});
+  if(!body.length)body=[['','','','','','','','','']];
+  ws.addTable({name:'WatchlistTable',ref:'A6',headerRow:true,totalsRow:false,style:{theme:'TableStyleMedium2',showRowStripes:true},columns:head.map(function(n){return{name:n,filterButton:true}}),rows:body});
+  ws.getRow(6).height=22;
+  var mins=[14,9,13,10,11,9,6,24,36],maxs=[22,12,14,11,13,10,8,60,60];
+  head.forEach(function(hd,i){var w=hd.length+4;body.forEach(function(r){var l=String(r[i]==null?'':r[i]).length+2;if(l>w)w=l});ws.getColumn(i+1).width=Math.min(Math.max(w,mins[i]),maxs[i])});
+
+  var green={font:{bold:true,color:{argb:'FF1E7A4C'}},bg:'D9EEDF'},yel={font:{bold:true,color:{argb:'FF83630F'}},bg:'F2E7C7'},red={font:{bold:true,color:{argb:'FFB23A32'}},bg:'F5DBD7'};
+  body.forEach(function(row,i){
+    var rn=7+i;ws.getRow(rn).height=rows.length?30:20;
+    for(var c=1;c<=9;c++){var cell=ws.getCell(rn,c);cell.alignment={vertical:'middle',horizontal:(c>=3&&c<=7)?'center':'left',wrapText:c>=8};box(cell)}
+    ws.getCell(rn,2).font={bold:true};
+    function tint(col,s){var c=ws.getCell(rn,col);c.font=s.font;c.fill=fill(s.bg)}
+    var r=rows[i];if(!r)return;
+    if(r.dir==='up')tint(3,green);else if(r.dir==='down')tint(3,red);else if(r.dir)tint(3,yel);
+    if(r.dbl==='Yes')tint(4,green);
+    if(wlCanAt(r)){if(r.at==='Yes')tint(6,green);else if(r.at==='Near')tint(6,yel);else if(r.at==='Fail')tint(6,red)}
+    if(wlAplus(r))tint(7,green);
+  });
+
+  var s0=7+body.length+2;
+  ws.mergeCells(s0,1,s0,9);
+  var sl=ws.getCell(s0,1);sl.value='Charts / screenshots';sl.font={bold:true,size:13};sl.fill=fill('E3E8E0');
+  ws.mergeCells(s0+1,1,s0+20,9);
+  var sb=ws.getCell(s0+1,1);sb.value='Paste screenshots here';sb.font={italic:true,color:{argb:'FF7C898B'}};sb.alignment={vertical:'top',horizontal:'left'};
+  for(var rr=s0+1;rr<=s0+20;rr++)for(var cc=1;cc<=9;cc++){ws.getCell(rr,cc).border={top:rr===s0+1?thin:undefined,bottom:rr===s0+20?thin:undefined,left:cc===1?thin:undefined,right:cc===9?thin:undefined}}
+  ws.views=[{state:'frozen',ySplit:6,showGridLines:false}];
+  ws.pageSetup={orientation:'landscape',fitToPage:true,fitToWidth:1,fitToHeight:0};
+
+  try{
+    var buf=await wb.xlsx.writeBuffer(),name='watchlist-'+d+'-'+wlDayName(d)+'.xlsx';
+    downloads.save({filename:name,data:buf}).then(function(){toast('Saved '+name)}).catch(function(e){if(!e||e.code!=='declined')toast("Couldn't save the file")});
+  }catch(e){console.error(e);toast("Couldn't build the Excel file")}
+}
+ACT.wlsave=function(){wlExport()};
+})();
 </script>
 <!-- Firebase SDKs -->
   <script type="module">

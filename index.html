@@ -299,8 +299,33 @@ function save(){
 }
 document.addEventListener('visibilitychange',function(){if(document.visibilityState==='hidden'&&state&&saveT){clearTimeout(saveT);saveT=null;dbPut('kv','state',JSON.parse(JSON.stringify(state))).catch(function(){})}});
 function imgURL(id){if(urlCache[id])return Promise.resolve(urlCache[id]);return dbGet('img',id).then(function(b){if(!b)return null;return urlCache[id]=URL.createObjectURL(b)})}
-function compress(file){return createImageBitmap(file).then(function(b){var sc=Math.min(1,1600/b.width),c=document.createElement('canvas');c.width=Math.round(b.width*sc);c.height=Math.round(b.height*sc);c.getContext('2d').drawImage(b,0,0,c.width,c.height);return new Promise(function(r){c.toBlob(r,'image/jpeg',0.82)})})}
-function loadImg(id){
+var IMG_MAX=1400,IMG_Q=0.72;
+function compress(file){return createImageBitmap(file).then(function(b){var sc=Math.min(1,IMG_MAX/b.width),c=document.createElement('canvas');c.width=Math.round(b.width*sc);c.height=Math.round(b.height*sc);c.getContext('2d').drawImage(b,0,0,c.width,c.height);return new Promise(function(r){c.toBlob(r,'image/jpeg',IMG_Q)})})}
+var shrinking=false;
+function mb(n){return(n/1048576).toFixed(1)+' MB'}
+async function shrinkAllImages(){
+  if(shrinking)return;shrinking=true;
+  var ids=[];state.trades.forEach(function(t){(t.shots||[]).forEach(function(id){if(ids.indexOf(id)<0)ids.push(id)})});
+  if(!ids.length){shrinking=false;toast('No screenshots to shrink');return}
+  var au=window.auth&&window.auth.currentUser,before=0,after=0,done=0,skipped=0;
+  for(var i=0;i<ids.length;i++){
+    var id=ids[i];toast('Shrinking screenshots… '+(i+1)+' of '+ids.length);
+    try{
+      var b=await dbGet('img',id);
+      if(!b&&au&&window.cloudGetImage){var d=await window.cloudGetImage(au.uid,id);if(d)b=dataURLToBlob(d)}
+      if(!b){skipped++;continue}
+      before+=b.size;
+      var nb=await compress(b);
+      if(!nb||nb.size>=b.size){after+=b.size;await dbPut('img',id,b);continue}
+      after+=nb.size;await dbPut('img',id,nb);
+      if(urlCache[id]){URL.revokeObjectURL(urlCache[id]);delete urlCache[id]}
+      if(au&&window.cloudPutImage){await window.cloudPutImage(au.uid,id,await blobToDataURL(nb));state.settings.imgUp=state.settings.imgUp||{};state.settings.imgUp[id]=1}
+      done++;
+    }catch(e){console.error('Shrink failed for',id,e);skipped++}
+  }
+  save();shrinking=false;
+  toast('Shrank '+done+' screenshot'+(done===1?'':'s')+': '+mb(before)+' → '+mb(after)+(skipped?' · '+skipped+' skipped':''));
+}function loadImg(id){
   return imgURL(id).then(function(u){
     if(u)return u;
     var au=window.auth&&window.auth.currentUser;if(!au||!window.cloudGetImage)return null;
@@ -658,7 +683,7 @@ VIEWS.account=function(){
   h+='<div class="sec"><h2>'+(c.id?'Edit entry':'Deposit or withdraw')+'</h2><div class="grid" style="align-items:end;max-width:760px"><div><p class="k" style="margin-bottom:4px">Type</p><div class="seg"><button class="chip'+(c.type==='deposit'?' on':'')+'" data-act="cashtype" data-v="deposit">Deposit</button><button class="chip'+(c.type==='withdraw'?' on':'')+'" data-act="cashtype" data-v="withdraw">Withdraw</button></div></div><label class="f"><span>Date</span><input data-cash="date" type="date" value="'+esc(c.date)+'"></label><label class="f"><span>Amount</span><input data-cash="amount" type="number" min="0" step="any" inputmode="decimal" value="'+esc(c.amount)+'"></label><label class="f"><span>Note (optional)</span><input data-cash="note" value="'+esc(c.note)+'"></label></div><div id="cerr" class="loss hint"></div><div style="display:flex;gap:8px;margin-top:8px"><button class="btn primary" data-act="cashsave">'+(c.id?'Save changes':'Add entry')+'</button>'+(c.id?'<button class="btn" data-act="cashcancel">Cancel</button>':'')+'</div></div>';
   h+='<div class="sec"><h2>Ledger</h2>'+(led.length?'<div class="panel tablewrap"><table class="tbl"><thead><tr><th>Date</th><th>Entry</th><th class="n">Amount</th><th class="n">Balance</th><th></th></tr></thead><tbody>'+led.map(function(r){return'<tr><td>'+fmtDate(r.date)+'</td><td>'+esc(r.label)+(r.note?' <span class="mut">· '+esc(r.note)+'</span>':'')+'</td><td class="n '+(r.amount<0?'loss':'win')+'">'+sMoney(r.amount)+'</td><td class="n">'+money(r.balance)+'</td><td style="text-align:right">'+(r.cash?'<button class="icon" data-act="cashedit" data-id="'+r.cash.id+'" aria-label="Edit entry">'+ICON.edit+'</button><button class="icon" data-act="cashdel" data-id="'+r.cash.id+'" aria-label="Delete entry">'+ICON.trash+'</button>':'<button class="btn link" data-act="opentrade" data-id="'+r.id+'">View</button>')+'</td></tr>'}).join('')+'</tbody></table></div>':'<p class="mut">No entries yet. Start with your first deposit.</p>')+'</div>';
   h+='<div class="sec"><h2>Settings</h2><label class="f" style="max-width:220px"><span>Default fee per contract</span><input data-set="fee" type="number" min="0" step="any" value="'+esc(state.settings.fee)+'"></label><p class="hint">Applies to new executions. You can change it on any trade.</p></div>';
-  h+='<div class="sec"><h2>Export and backup</h2>'+(downloads?'':'<p class="hint" style="margin:0 0 10px">Downloads aren\'t available in this view.</p>')+'<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end"><label class="f" style="width:110px"><span>Year</span><select id="csvyear">'+years.map(function(y){return'<option>'+y+'</option>'}).join('')+'</select></label><button class="btn" data-act="csv"'+(downloads?'':' disabled')+'>Export yearly CSV</button><button class="btn" data-act="backup"'+(downloads?'':' disabled')+'>Back up everything</button><label class="btn" style="cursor:pointer">Restore from backup<input type="file" accept=".json,application/json" data-act="restorefile" style="display:none"></label></div><p class="hint">The CSV lists closed trades for the year. The backup includes trades, deposits, screenshots and the watchlist.'+(state.settings.lastBackup?' Last backup: '+fmtDate(state.settings.lastBackup)+'.':' You haven\'t backed up yet.')+'</p>'+
+  h+='<div class="sec"><h2>Export and backup</h2>'+(downloads?'':'<p class="hint" style="margin:0 0 10px">Downloads aren\'t available in this view.</p>')+'<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end"><label class="f" style="width:110px"><span>Year</span><select id="csvyear">'+years.map(function(y){return'<option>'+y+'</option>'}).join('')+'</select></label><button class="btn" data-act="csv"'+(downloads?'':' disabled')+'>Export yearly CSV</button><button class="btn" data-act="backup"'+(downloads?'':' disabled')+'>Back up everything</button><label class="btn" style="cursor:pointer">Restore from backup<input type="file" accept=".json,application/json" data-act="restorefile" style="display:none"></label><button class="btn" data-act="shrinkimgs">Shrink saved screenshots</button></div><p class="hint">The CSV lists closed trades for the year. The backup includes trades, deposits, screenshots and the watchlist.'+(state.settings.lastBackup?' Last backup: '+fmtDate(state.settings.lastBackup)+'.':' You haven\'t backed up yet.')+'</p>'+
     (pendingRestore?'<div class="callout" style="margin-top:12px"><span>Replace your current journal with this backup ('+pendingRestore.state.trades.length+' trades, '+pendingRestore.state.cash.length+' cash entries)?</span><span><button class="btn sm danger" data-act="restoreyes">Replace</button> <button class="btn sm" data-act="restoreno">Cancel</button></span></div>':'')+'</div>';
   return h;
 };

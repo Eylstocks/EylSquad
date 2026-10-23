@@ -1179,6 +1179,86 @@ async function wlExport(){
   }catch(e){console.error(e);toast("Couldn't build the Excel file")}
 }
 ACT.wlsave=function(){wlExport()};
+  /* ===== Inline row editing (replaces the side panel) ===== */
+document.head.insertAdjacentHTML('beforeend','<style>'+
+'main:has(.wlfull){max-width:none}'+
+'.wlt td{padding:7px 5px;vertical-align:middle}'+
+'.wlt .seg{flex-wrap:nowrap;gap:3px}'+
+'.wlt .chip{padding:2px 8px;font-size:12px;white-space:nowrap}'+
+'.wlt input{padding:4px 7px;font-size:13px}'+
+'.wlt .wllv{width:84px}.wlt .wlwt{min-width:190px}'+
+'.wlt input:disabled{opacity:.45}'+
+'.wlt .btn.sm{padding:4px 10px}'+
+'</style>');
+
+function wlById(id){return(wl&&id&&wl.rows.find(function(x){return x.id===id}))||null}
+function wlApHtml(r){return wlAplus(r)?(r.checked===today()?'<span class="pill win">A+</span>':'<span class="pill even" title="Not checked today">A+?</span>'):''}
+
+wlTr=function(r){
+  var t=today(),st=wlPick(r),fresh=r.checked===t,can=wlCanAt(r),id=r.id;
+  function chips(f,opts,dis){return'<div class="seg">'+opts.map(function(o){var on=r[f]===o[0];return'<button type="button" class="chip'+(o[2]?' bad':'')+(on?' on':'')+'" data-act="wlset" data-id="'+id+'" data-wf="'+f+'" data-v="'+o[0]+'" aria-pressed="'+on+'"'+(dis?' disabled':'')+'>'+o[1]+'</button>'}).join('')+'</div>'}
+  return'<tr data-wlsel="'+id+'"'+(wlUI.sel===id?' class="wlon"':'')+'>'+
+    '<td class="sym">'+esc(r.ticker)+'</td>'+
+    '<td>'+chips('dir',[['up','Up',0],['down','Down',1],['rup','Rev ↑',0],['rdown','Rev ↓',1]])+'</td>'+
+    '<td>'+chips('dbl',[['Yes','Yes',0],['No','No',0]])+'</td>'+
+    '<td><input class="wllv" data-wlf="level" data-id="'+id+'" inputmode="decimal" autocomplete="off" value="'+esc(r.level)+'" placeholder="—"'+(r.dbl==='Yes'?'':' disabled')+' aria-label="Continuation level for '+esc(r.ticker)+'"></td>'+
+    '<td>'+chips('at',[['No','No',0],['Near','Near',0],['Yes','Yes',0],['Fail','Fail',1]],!can)+(r.at==='Fail'&&can?'<button class="btn link" data-act="wlfailclear" data-id="'+id+'">Clear setup</button>':'')+'</td>'+
+    '<td><input class="wlwt" data-wlf="waiting" data-id="'+id+'" autocomplete="off" value="'+esc(r.waiting)+'" placeholder="What has to happen first" aria-label="Waiting for, '+esc(r.ticker)+'"></td>'+
+    '<td class="wlap">'+wlApHtml(r)+'</td>'+
+    '<td>'+(fresh?'<span class="pill win">✓ Today</span>':'<span class="pill loss">'+(r.checked?md(r.checked):'Never')+'</span>')+'</td>'+
+    '<td style="white-space:nowrap">'+(st?'<span class="pill '+(st==='add'?'win':'even')+'">'+(st==='add'?'Added':'Passed')+'</span> <button class="btn link" data-act="wlclearpick" data-id="'+id+'">Undo</button>':'<button class="btn sm primary" data-act="wldecide" data-id="'+id+'" data-v="add">Add</button> <button class="btn sm" data-act="wldecide" data-id="'+id+'" data-v="pass">Pass</button>')+'</td>'+
+    '<td style="text-align:right"><button class="icon" data-act="wldel" data-id="'+id+'" aria-label="Remove '+esc(r.ticker)+'">'+ICON.trash+'</button></td></tr>';
+};
+
+wlPatch=function(r){
+  var tr=document.querySelector('tr[data-wlsel="'+r.id+'"]');if(!tr)return;
+  var can=wlCanAt(r);
+  tr.querySelectorAll('[data-wf="at"]').forEach(function(b){b.disabled=!can});
+  var ap=tr.querySelector('.wlap');if(ap)ap.innerHTML=wlApHtml(r);
+};
+
+VIEWS.watchlist=function(){
+  wlEnsure();
+  if(!wl)return'<div class="top"><div><h1>Watchlist</h1></div></div><p class="mut">Loading…</p>';
+  var t=today(),day=wlDay(),list=wlList(),N=wl.rows.length;
+  if(!list.some(function(r){return r.id===wlUI.sel})){var u=list.find(function(r){return r.checked!==t})||list[0];wlUI.sel=u?u.id:null}
+  var nChk=wl.rows.filter(function(r){return r.checked===t}).length,
+      nAdd=wl.rows.filter(function(r){return wlPick(r)==='add'}).length,
+      nPass=wl.rows.filter(function(r){return wlPick(r)==='pass'}).length,
+      nAp=wl.rows.filter(function(r){return wlAplus(r)&&r.checked===t}).length;
+  var h='<div class="top"><div><h1>Watchlist</h1><p class="sub">'+(N&&nChk===N?'<span class="win">All '+N+' checked today ✓</span>':nChk+' of '+N+' checked today')+' · '+nAdd+' on today\'s list'+(nAp?' · <span class="win">'+nAp+' A+</span>':'')+'<span id="wlcloud">'+(wlCloud?' · '+esc(wlCloud):'')+'</span></p></div><button class="btn primary" data-act="wlsave">Save today\'s list</button></div>';
+  h+='<div class="panel" style="padding:10px 18px;margin-bottom:14px">'+wlDayRow('Any major news?','news',day)+wlDayRow('Upcoming earnings?','earn',day)+'</div>';
+  h+='<div class="seg" style="margin-bottom:10px" role="group" aria-label="Filter">'+[['all','All',N-nPass],['today','Today\'s list',nAdd],['unchecked','Not checked',N-nChk],['skipped','Skipped',nPass]].map(function(c){return'<button class="chip'+(wlUI.f===c[0]?' on':'')+'" data-act="wlfilter" data-v="'+c[0]+'">'+c[1]+' ('+c[2]+')</button>'}).join('')+'</div>';
+  var tb='<div class="panel tablewrap"><table class="tbl wlt"><thead><tr><th>Ticker</th><th>Direction</th><th>DBL break</th><th>Cont. level</th><th>At level</th><th>Waiting for</th><th>A+</th><th>Checked</th><th>Today</th><th></th></tr></thead><tbody>',lastG=null;
+  list.forEach(function(r){if(r.group!==lastG){lastG=r.group;tb+='<tr class="gh"><td colspan="10">'+esc(r.group)+'</td></tr>'}tb+=wlTr(r)});
+  if(!list.length)tb+='<tr><td colspan="10" class="mut" style="text-align:center;padding:24px">'+({today:'Nothing added yet. Press Add on a ticker.',unchecked:'Everything is checked for today ✓',skipped:'Nothing passed today.'}[wlUI.f]||'No tickers yet.')+'</td></tr>';
+  tb+='</tbody></table></div>';
+  var gs=Array.from(new Set(wl.rows.map(function(r){return r.group})));
+  tb+='<datalist id="wlgroups">'+gs.map(function(g){return'<option value="'+esc(g)+'">'}).join('')+'</datalist><div class="fbar" style="margin-top:12px"><input data-wl="ntick" placeholder="Ticker" aria-label="New ticker" style="text-transform:uppercase"><input data-wl="ngrp" list="wlgroups" placeholder="Group" aria-label="Group"><button class="btn sm" data-act="wladd">Add ticker</button></div>';
+  return'<div class="wlfull">'+h+tb+'<p class="hint">Click a row or use ↑ ↓ to highlight it. Keys work on the highlighted row: 1–4 direction · D DBL break · L level · 5–8 at level · W waiting for · A add · P pass · Enter or Esc leaves a box. Everything carries over day to day; Checked and Add/Pass start fresh each morning.</p></div>';
+};
+
+ACT.wlset=function(b){var r=wlById(b.dataset.id)||wlCur();if(!r||b.disabled)return;wlUI.sel=r.id;wlSetField(r,b.dataset.wf,b.dataset.v)};
+ACT.wldecide=function(b){if(b.dataset.id)wlUI.sel=b.dataset.id;wlDecide(b.dataset.v)};
+ACT.wlclearpick=function(b){var r=wlById(b&&b.dataset.id)||wlCur();if(!r)return;r.pick='';r.pickDate='';r.updatedAt=Date.now();wlUI.sel=r.id;wlPersist();render()};
+ACT.wlfailclear=function(b){var r=wlById(b&&b.dataset.id)||wlCur();if(!r)return;r.dbl='No';r.level='';r.at='';r.updatedAt=Date.now();wlPersist();render()};
+
+/* typing in a row's box saves to that row and highlights it */
+document.addEventListener('input',function(e){var d=e.target.dataset;if(d&&d.wlf&&d.id)wlUI.sel=d.id},true);
+document.addEventListener('focusin',function(e){
+  var d=e.target.dataset;if(view.name!=='watchlist'||!wl||!d||!d.wlf||!d.id||wlUI.sel===d.id)return;
+  wlUI.sel=d.id;document.querySelectorAll('.wlt tr.wlon').forEach(function(x){x.classList.remove('wlon')});
+  var tr=e.target.closest('tr');if(tr)tr.classList.add('wlon');
+});
+/* L and W jump into the highlighted row's boxes */
+document.addEventListener('keydown',function(e){
+  if(view.name!=='watchlist'||!wl||e.ctrlKey||e.metaKey||e.altKey)return;
+  var tg=e.target;if(tg&&(tg.tagName==='INPUT'||tg.tagName==='TEXTAREA'||tg.tagName==='SELECT'))return;
+  var k=e.key.toLowerCase();if(k!=='l'&&k!=='w')return;
+  var tr=document.querySelector('tr[data-wlsel="'+wlUI.sel+'"]');if(!tr)return;
+  var i=tr.querySelector('[data-wlf="'+(k==='l'?'level':'waiting')+'"]');
+  e.preventDefault();e.stopImmediatePropagation();if(i&&!i.disabled)i.focus();
+},true);
 })();
 </script>
 <!-- Firebase SDKs -->

@@ -1259,6 +1259,53 @@ document.addEventListener('keydown',function(e){
   var i=tr.querySelector('[data-wlf="'+(k==='l'?'level':'waiting')+'"]');
   e.preventDefault();e.stopImmediatePropagation();if(i&&!i.disabled)i.focus();
 },true);
+  /* ===== Dropdowns instead of buttons in each row ===== */
+document.head.insertAdjacentHTML('beforeend','<style>'+
+'.wlt select{width:auto;padding:4px 6px;font-size:13px}'+
+'.wlt .wsdir{min-width:118px}.wlt .wsdbl{min-width:64px}.wlt .wsat{min-width:74px}'+
+'.wlt select:disabled{opacity:.45}'+
+'</style>');
+
+wlTr=function(r){
+  var t=today(),st=wlPick(r),fresh=r.checked===t,can=wlCanAt(r),id=r.id;
+  function dd(f,cls,opts,dis){
+    var v=r[f]||'',col=(f==='dir'?{up:'var(--win)',down:'var(--loss)',rup:'var(--warn)',rdown:'var(--warn)'}:f==='dbl'?{Yes:'var(--win)'}:{Yes:'var(--win)',Near:'var(--warn)',Fail:'var(--loss)'})[v]||'inherit';
+    return'<select class="'+cls+'" data-wls="'+f+'" data-id="'+id+'" style="color:'+col+'"'+(dis?' disabled':'')+' aria-label="'+f+' for '+esc(r.ticker)+'"><option value="">—</option>'+opts.map(function(o){return'<option value="'+o[0]+'"'+(v===o[0]?' selected':'')+'>'+o[1]+'</option>'}).join('')+'</select>';
+  }
+  return'<tr data-wlsel="'+id+'"'+(wlUI.sel===id?' class="wlon"':'')+'>'+
+    '<td class="sym">'+esc(r.ticker)+'</td>'+
+    '<td>'+dd('dir','wsdir',[['up','Uptrend'],['down','Downtrend'],['rup','Reversal ↑'],['rdown','Reversal ↓']])+'</td>'+
+    '<td>'+dd('dbl','wsdbl',[['Yes','Yes'],['No','No']])+'</td>'+
+    '<td><input class="wllv" data-wlf="level" data-id="'+id+'" inputmode="decimal" autocomplete="off" value="'+esc(r.level)+'" placeholder="—"'+(r.dbl==='Yes'?'':' disabled')+' aria-label="Continuation level for '+esc(r.ticker)+'"></td>'+
+    '<td>'+dd('at','wsat',[['No','No'],['Near','Near'],['Yes','Yes'],['Fail','Fail']],!can)+(r.at==='Fail'&&can?' <button class="btn link" data-act="wlfailclear" data-id="'+id+'">Clear setup</button>':'')+'</td>'+
+    '<td><input class="wlwt" data-wlf="waiting" data-id="'+id+'" autocomplete="off" value="'+esc(r.waiting)+'" placeholder="What has to happen first" aria-label="Waiting for, '+esc(r.ticker)+'"></td>'+
+    '<td class="wlap">'+wlApHtml(r)+'</td>'+
+    '<td>'+(fresh?'<span class="pill win">✓ Today</span>':'<span class="pill loss">'+(r.checked?md(r.checked):'Never')+'</span>')+'</td>'+
+    '<td style="white-space:nowrap">'+(st?'<span class="pill '+(st==='add'?'win':'even')+'">'+(st==='add'?'Added':'Passed')+'</span> <button class="btn link" data-act="wlclearpick" data-id="'+id+'">Undo</button>':'<button class="btn sm primary" data-act="wldecide" data-id="'+id+'" data-v="add">Add</button> <button class="btn sm" data-act="wldecide" data-id="'+id+'" data-v="pass">Pass</button>')+'</td>'+
+    '<td style="text-align:right"><button class="icon" data-act="wldel" data-id="'+id+'" aria-label="Remove '+esc(r.ticker)+'">'+ICON.trash+'</button></td></tr>';
+};
+
+wlPatch=function(r){
+  var tr=document.querySelector('tr[data-wlsel="'+r.id+'"]');if(!tr)return;
+  var s=tr.querySelector('[data-wls="at"]');if(s)s.disabled=!wlCanAt(r);
+  var ap=tr.querySelector('.wlap');if(ap)ap.innerHTML=wlApHtml(r);
+};
+
+/* picking a value in a dropdown saves it to that row */
+document.addEventListener('change',function(e){
+  var t=e.target,f=t.dataset&&t.dataset.wls;if(!f||!wl)return;
+  var r=wlById(t.dataset.id);if(!r)return;
+  wlUI.sel=r.id;r[f]=t.value;
+  if(f==='dbl'&&r.dbl!=='Yes')r.at='';
+  r.updatedAt=Date.now();wlPersist();render();
+});
+/* keep the dropdown open when clicked, and highlight its row */
+document.addEventListener('click',function(e){if(e.target.closest&&e.target.closest('select[data-wls]'))e.stopPropagation()},true);
+document.addEventListener('focusin',function(e){
+  var d=e.target.dataset;if(view.name!=='watchlist'||!wl||!d||!d.wls||!d.id||wlUI.sel===d.id)return;
+  wlUI.sel=d.id;document.querySelectorAll('.wlt tr.wlon').forEach(function(x){x.classList.remove('wlon')});
+  var tr=e.target.closest('tr');if(tr)tr.classList.add('wlon');
+});
 })();
 </script>
 <!-- Firebase SDKs -->

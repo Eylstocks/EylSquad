@@ -882,6 +882,8 @@ document.head.insertAdjacentHTML('beforeend','<style>'+
 '.wlt input:disabled,.wlt select:disabled{opacity:.45}'+
 '.wlt .btn.sm{padding:4px 10px}'+
 '.wlt .wled{width:132px}.wlt .wleh{min-width:46px}'+
+'.wlt .wspk{min-width:76px}.wlt tr.wlA td:first-child{box-shadow:inset 3px 0 0 var(--win)}.wlt tr.wlA.wlon td:first-child{box-shadow:inset 3px 0 0 var(--accent)}'+
+'.wlt .wllast{font-size:11.5px;color:var(--muted);margin-left:4px}'+
 '.wlew{display:flex;gap:6px;flex-wrap:wrap;align-items:center}.wlmk{font-size:13px;color:var(--ink2);padding:2px 0 4px 160px}'+
 '@media (max-width:820px){.wlmk{padding-left:0}}'+
 '</style>');
@@ -1041,22 +1043,21 @@ function wlDD(r,f,cls,opts,dis){
 }
 function wlTr(r){
   var t=today(),st=wlPick(r),fresh=r.checked===t,can=wlCanAt(r),id=r.id;
-  return'<tr data-wlsel="'+id+'"'+(wlUI.sel===id?' class="wlon"':'')+'>'+
+  var cl=(wlUI.sel===id?'wlon ':'')+(wlAplus(r)?'wlA':'');
+  return'<tr data-wlsel="'+id+'"'+(cl.trim()?' class="'+cl.trim()+'"':'')+'>'+
     '<td class="sym">'+esc(r.ticker)+'</td>'+wlEarnTd(r)+
     '<td>'+wlDD(r,'dir','wsdir',WL_DIRS)+'</td>'+
     '<td>'+wlDD(r,'dbl','wsdbl',WL_DBLS)+'</td>'+
     '<td><input class="wllv" data-wlf="level" data-id="'+id+'" inputmode="decimal" autocomplete="off" value="'+esc(r.level)+'" placeholder="—"'+(r.dbl==='Yes'?'':' disabled')+' aria-label="Continuation level for '+esc(r.ticker)+'"></td>'+
     '<td>'+wlDD(r,'at','wsat',WL_ATS,!can)+(r.at==='Fail'&&can?' <button class="btn link" data-act="wlfailclear" data-id="'+id+'">Clear setup</button>':'')+'</td>'+
     '<td><input class="wlwt" data-wlf="waiting" data-id="'+id+'" autocomplete="off" value="'+esc(r.waiting)+'" placeholder="What has to happen first" aria-label="Waiting for, '+esc(r.ticker)+'"></td>'+
-    '<td class="wlap">'+wlApHtml(r)+'</td>'+
-    '<td>'+(fresh?'<span class="pill win">✓ Today</span>':'<span class="pill loss">'+(r.checked?md(r.checked):'Never')+'</span>')+'</td>'+
-    '<td style="white-space:nowrap">'+(st?'<span class="pill '+(st==='add'?'win':'even')+'">'+(st==='add'?'Added':'Passed')+'</span> <button class="btn link" data-act="wlclearpick" data-id="'+id+'">Undo</button>':'<button class="btn sm primary" data-act="wldecide" data-id="'+id+'" data-v="add">Add</button> <button class="btn sm" data-act="wldecide" data-id="'+id+'" data-v="pass">Pass</button>')+'</td>'+
+    '<td style="white-space:nowrap"><select class="wspk" data-wls="pick" data-id="'+id+'" style="color:'+(st==='add'?'var(--win)':st==='pass'?'var(--muted)':'inherit')+'" aria-label="Today, '+esc(r.ticker)+'"><option value="">—</option><option value="add"'+(st==='add'?' selected':'')+'>Add</option><option value="pass"'+(st==='pass'?' selected':'')+'>Pass</option></select> <span class="wlap">'+wlApHtml(r)+'</span>'+(st?'':' <span class="wllast">'+(fresh?'checked today':r.checked?'last '+md(r.checked):'never')+'</span>')+'</td>'+
     '<td style="text-align:right"><button class="icon" data-act="wldel" data-id="'+id+'" aria-label="Remove '+esc(r.ticker)+'">'+ICON.trash+'</button></td></tr>';
 }
 function wlPatch(r){
   var tr=document.querySelector('tr[data-wlsel="'+r.id+'"]');if(!tr)return;
   var s=tr.querySelector('[data-wls="at"]');if(s)s.disabled=!wlCanAt(r);
-  var ap=tr.querySelector('.wlap');if(ap)ap.innerHTML=wlApHtml(r);
+  var ap=tr.querySelector('.wlap');if(ap)ap.innerHTML=wlApHtml(r);tr.classList.toggle('wlA',wlAplus(r));
 }
 function wlDayRow(label,k,d){
   var v=d[k];
@@ -1072,14 +1073,14 @@ VIEWS.watchlist=function(){
   var h='<div class="top"><div><h1>Watchlist</h1><p class="sub">'+(N&&nChk===N?'<span class="win">All '+N+' checked today ✓</span>':nChk+' of '+N+' checked today')+' · '+nAdd+' on today\'s list'+(nAp?' · <span class="win">'+nAp+' A+</span>':'')+'<span id="wlcloud">'+(wlCloud?' · '+esc(wlCloud):'')+'</span></p></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" data-act="wlearn">Refresh earnings</button><button class="btn primary" data-act="wlsave">Save today\'s list</button></div></div>';
   h+='<div class="panel" style="padding:10px 18px;margin-bottom:14px">'+wlDayRow('Any major news?','news',day)+wlEarnRow()+'</div>';
   h+='<div class="seg" style="margin-bottom:10px" role="group" aria-label="Filter">'+[['all','All',N-nPass],['today','Today\'s list',nAdd],['unchecked','Not checked',N-nChk],['skipped','Skipped',nPass]].map(function(c){return'<button class="chip'+(wlUI.f===c[0]?' on':'')+'" data-act="wlfilter" data-v="'+c[0]+'">'+c[1]+' ('+c[2]+')</button>'}).join('')+'</div>';
-  h+='<div class="panel tablewrap"><table class="tbl wlt"><thead><tr><th>Ticker</th><th>Earnings</th><th>Direction</th><th>DBL break</th><th>Cont. level</th><th>At level</th><th>Waiting for</th><th>A+</th><th>Checked</th><th>Today</th><th></th></tr></thead><tbody>';
+  h+='<div class="panel tablewrap"><table class="tbl wlt"><thead><tr><th>Ticker</th><th>Earnings</th><th>Direction</th><th>DBL break</th><th>Cont. level</th><th>At level</th><th>Waiting for</th><th>Today</th><th></th></tr></thead><tbody>';
   var lastG=null;
-  list.forEach(function(r){if(r.group!==lastG){lastG=r.group;h+='<tr class="gh"><td colspan="11">'+esc(r.group)+'</td></tr>'}h+=wlTr(r)});
-  if(!list.length)h+='<tr><td colspan="11" class="mut" style="text-align:center;padding:24px">'+({today:'Nothing added yet. Press Add on a ticker.',unchecked:'Everything is checked for today ✓',skipped:'Nothing passed today.'}[wlUI.f]||'No tickers yet.')+'</td></tr>';
+  list.forEach(function(r){if(r.group!==lastG){lastG=r.group;h+='<tr class="gh"><td colspan="9">'+esc(r.group)+'</td></tr>'}h+=wlTr(r)});
+  if(!list.length)h+='<tr><td colspan="9" class="mut" style="text-align:center;padding:24px">'+({today:'Nothing added yet. Press Add on a ticker.',unchecked:'Everything is checked for today ✓',skipped:'Nothing passed today.'}[wlUI.f]||'No tickers yet.')+'</td></tr>';
   h+='</tbody></table></div>';
   var gs=Array.from(new Set(wl.rows.map(function(r){return r.group})));
   h+='<datalist id="wlgroups">'+gs.map(function(g){return'<option value="'+esc(g)+'">'}).join('')+'</datalist><div class="fbar" style="margin-top:12px"><input data-wl="ntick" placeholder="Ticker" aria-label="New ticker" style="text-transform:uppercase"><input data-wl="ngrp" list="wlgroups" placeholder="Group" aria-label="Group"><button class="btn sm" data-act="wladd">Add ticker</button></div>';
-  return'<div class="wlfull">'+h+'<p class="hint">Earnings: green = 2–5 trading days away, red = 1 day or today (☀ before open counts a day earlier). Weekends and market holidays are skipped. Click a row or use ↑ ↓ to highlight it. Keys work on the highlighted row: 1–4 direction · D DBL break · L level · 5–8 at level · W waiting for · A add · P pass · Enter or Esc leaves a box. Everything carries over day to day; Checked and Add/Pass start fresh each morning.</p></div>';
+  return'<div class="wlfull">'+h+'<p class="hint">Earnings: green = 2–5 trading days away, red = 1 day or today (☀ before open counts a day earlier). Weekends and market holidays are skipped. Click a row or use ↑ ↓ to highlight it. Keys work on the highlighted row: 1–4 direction · D DBL break · L level · 5–8 at level · W waiting for · A add · P pass (or use the Today dropdown; set it back to — to undo) · Enter or Esc leaves a box. Everything carries over day to day; Checked and Add/Pass start fresh each morning.</p></div>';
 };
 
 /* ---------- actions ---------- */
@@ -1141,7 +1142,9 @@ document.addEventListener('change',function(e){
 /* dropdown picked */
 document.addEventListener('change',function(e){
   var t=e.target,f=t.dataset&&t.dataset.wls;if(!f||!wl)return;
-  var r=wlById(t.dataset.id);if(r)wlSet(r,f,t.value);
+  var r=wlById(t.dataset.id);if(!r)return;
+  if(f==='pick'){wlUI.sel=r.id;if(t.value)wlDecide(t.value);else{r.pick='';r.pickDate='';r.updatedAt=Date.now();wlPersist();render()}return}
+  wlSet(r,f,t.value);
 });
 /* typing in a box */
 document.addEventListener('input',function(e){

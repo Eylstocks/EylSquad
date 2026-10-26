@@ -882,6 +882,8 @@ document.head.insertAdjacentHTML('beforeend','<style>'+
 '.wlt input:disabled,.wlt select:disabled{opacity:.45}'+
 '.wlt .btn.sm{padding:4px 10px}'+
 '.wlt .wled{width:132px}.wlt .wleh{min-width:46px}'+
+'.wlew{display:flex;gap:6px;flex-wrap:wrap;align-items:center}.wlmk{font-size:13px;color:var(--ink2);padding:2px 0 4px 160px}'+
+'@media (max-width:820px){.wlmk{padding-left:0}}'+
 '</style>');
 
 /* ---------- settings ---------- */
@@ -939,7 +941,16 @@ function wlHighlight(id){wlUI.sel=id;document.querySelectorAll('.wlt tr.wlon').f
 
 /* ---------- earnings ---------- */
 function wlWait(ms){return new Promise(function(z){setTimeout(z,ms)})}
-function wlTdays(a,b){var n=0,d=a;while(d<b){d=addDays(d,1);var w=new Date(d+'T12:00:00').getDay();if(w!==0&&w!==6)n++}return n}
+/* NYSE market holidays and early closes. UPDATE EACH YEAR from nyse.com/markets/hours-calendars */
+var WL_HOL={'2026-01-01':"New Year's Day",'2026-01-19':'MLK Day','2026-02-16':"Presidents' Day",'2026-04-03':'Good Friday','2026-05-25':'Memorial Day','2026-06-19':'Juneteenth','2026-07-03':'Independence Day','2026-09-07':'Labor Day','2026-11-26':'Thanksgiving','2026-12-25':'Christmas',
+'2027-01-01':"New Year's Day",'2027-01-18':'MLK Day','2027-02-15':"Presidents' Day",'2027-03-26':'Good Friday','2027-05-31':'Memorial Day','2027-06-18':'Juneteenth','2027-07-05':'Independence Day','2027-09-06':'Labor Day','2027-11-25':'Thanksgiving','2027-12-24':'Christmas'};
+var WL_EARLY={'2026-11-27':'Day after Thanksgiving','2026-12-24':'Christmas Eve','2027-11-26':'Day after Thanksgiving'};
+function wlTrading(d){var w=new Date(d+'T12:00:00').getDay();return w!==0&&w!==6&&!WL_HOL[d]}
+function wlTdays(a,b){var n=0,d=a;while(d<b){d=addDays(d,1);if(wlTrading(d))n++}return n}
+function wlWeekEnd(){var d=today(),c=wlTrading(d)?1:0;while(c<5){d=addDays(d,1);if(wlTrading(d))c++}return d}
+function wlEarnWeek(){var t=today(),end=wlWeekEnd();return wl.rows.filter(function(r){return r.earnDate&&r.earnDate>=t&&r.earnDate<=end}).sort(function(a,b){return a.earnDate.localeCompare(b.earnDate)||(a.earnHour==='bmo'?-1:1)})}
+function wlDn(d){return DAYN[new Date(d+'T12:00:00').getDay()]+' '+md(d)}
+function wlMkt(){var out=[],d=today(),end=wlWeekEnd();while(d<=end){if(WL_HOL[d])out.push({c:1,t:'Market closed '+wlDn(d)+' · '+WL_HOL[d]});else if(WL_EARLY[d]&&wlTrading(d))out.push({c:0,t:'Early close 1pm '+wlDn(d)+' · '+WL_EARLY[d]});d=addDays(d,1)}return out}
 function wlEarn(r){
   var t=today();if(!r.earnDate||r.earnDate<t)return null;
   var n=wlTdays(t,r.earnDate),eff=r.earnHour==='bmo'?Math.max(0,n-1):n;
@@ -948,15 +959,16 @@ function wlEarn(r){
 function wlEarnText(r){if(!wlEarn(r))return'';return DAYN[new Date(r.earnDate+'T12:00:00').getDay()]+' '+md(r.earnDate)+(r.earnHour==='bmo'?' ☀':r.earnHour==='amc'?' ☾':'')}
 function wlEarnTd(r){
   var e=wlEarn(r),id=r.id,t=today(),bc=e&&e.cls?' style="border-color:var(--'+e.cls+')"':'';
+  if(!e&&wlUI.edE!==id)return'<td><button class="btn link" data-act="wleadd" data-id="'+id+'" aria-label="Add earnings date for '+esc(r.ticker)+'">+ date</button></td>';
   return'<td style="white-space:nowrap"><input type="date" class="wled" data-wle="date" data-id="'+id+'" value="'+esc(r.earnDate&&r.earnDate>=t?r.earnDate:'')+'"'+bc+' aria-label="Earnings date for '+esc(r.ticker)+'"> <select class="wleh" data-wle="hour" data-id="'+id+'" aria-label="Before open or after close" title="☀ before open · ☾ after close">'+[['','—'],['bmo','☀'],['amc','☾']].map(function(o){return'<option value="'+o[0]+'"'+(r.earnHour===o[0]?' selected':'')+'>'+o[1]+'</option>'}).join('')+'</select>'+(e?' <span class="pill '+(e.cls||'even')+'">'+(e.n===0?'Today':e.n+'d')+'</span>':'')+'</td>';
 }
-function wlEarnDay(){
-  var d=wlDay();if(d.earn!==''&&!d.earnAuto)return;
-  var soon=wl.rows.filter(function(r){var e=wlEarn(r);return e&&e.eff<=5}).sort(function(a,b){return a.earnDate.localeCompare(b.earnDate)});
-  var ne=soon.length?'Yes':'',nn=soon.map(function(r){return r.ticker+' '+wlEarnText(r)}).join(', ');
-  if(d.earn===ne&&(d.earnNote||'')===nn)return;
-  d.earn=ne;d.earnNote=nn;d.earnAuto=!!ne;d.updatedAt=Date.now();wlPersist();
+function wlEarnRow(){
+  var list=wlEarnWeek(),d=wlDay(),mk=wlMkt();
+  var h='<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:5px 0"><span style="min-width:150px;font-weight:500">Earnings this week</span><div class="wlew">'+(list.length?list.map(function(r){var e=wlEarn(r);return'<span class="pill '+(e&&e.cls?e.cls:'even')+'">'+esc(r.ticker+' '+wlEarnText(r))+'</span>'}).join(''):'<span class="mut" style="font-size:13px">None on your watchlist in the next 5 trading days</span>')+'</div><input data-wlday="earnNote" value="'+esc(d.earnNote||'')+'" placeholder="Other reports to watch, e.g. WMT Tue ☀" aria-label="Other earnings to watch" style="flex:1 1 220px;max-width:340px" autocomplete="off"></div>';
+  if(mk.length)h+='<div class="wlmk">'+mk.map(function(m){return(m.c?'🏖 <b class="loss">':'⏰ <b class="warn" style="color:var(--warn)">')+esc(m.t.split(' · ')[0])+'</b> · '+esc(m.t.split(' · ')[1])}).join(' &nbsp;·&nbsp; ')+'</div>';
+  return h;
 }
+function wlEarnWeekText(){var l=wlEarnWeek().map(function(r){return r.ticker+' '+wlEarnText(r)}).join(', '),n=(wlDay().earnNote||'').trim(),m=wlMkt().map(function(x){return x.t}).join('; ');return[l||'None on watchlist',n?'Other: '+n:'',m].filter(Boolean).join(' · ')}
 var wlEarnBusy=false;
 async function wlEarnRefresh(force){
   var key=(state.settings.fhKey||'').trim();
@@ -1053,12 +1065,12 @@ function wlDayRow(label,k,d){
 VIEWS.watchlist=function(){
   wlEnsure();
   if(!wl)return'<div class="top"><div><h1>Watchlist</h1></div></div><p class="mut">Loading…</p>';
-  wlEarnDay();var t=today(),day=wlDay(),list=wlList(),N=wl.rows.length;
+  var t=today(),day=wlDay(),list=wlList(),N=wl.rows.length;
   if(!list.some(function(r){return r.id===wlUI.sel})){var u=list.find(function(r){return r.checked!==t})||list[0];wlUI.sel=u?u.id:null}
   function count(fn){return wl.rows.filter(fn).length}
   var nChk=count(function(r){return r.checked===t}),nAdd=count(function(r){return wlPick(r)==='add'}),nPass=count(function(r){return wlPick(r)==='pass'}),nAp=count(function(r){return wlAplus(r)&&r.checked===t});
   var h='<div class="top"><div><h1>Watchlist</h1><p class="sub">'+(N&&nChk===N?'<span class="win">All '+N+' checked today ✓</span>':nChk+' of '+N+' checked today')+' · '+nAdd+' on today\'s list'+(nAp?' · <span class="win">'+nAp+' A+</span>':'')+'<span id="wlcloud">'+(wlCloud?' · '+esc(wlCloud):'')+'</span></p></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" data-act="wlearn">Refresh earnings</button><button class="btn primary" data-act="wlsave">Save today\'s list</button></div></div>';
-  h+='<div class="panel" style="padding:10px 18px;margin-bottom:14px">'+wlDayRow('Any major news?','news',day)+wlDayRow('Upcoming earnings?','earn',day)+'</div>';
+  h+='<div class="panel" style="padding:10px 18px;margin-bottom:14px">'+wlDayRow('Any major news?','news',day)+wlEarnRow()+'</div>';
   h+='<div class="seg" style="margin-bottom:10px" role="group" aria-label="Filter">'+[['all','All',N-nPass],['today','Today\'s list',nAdd],['unchecked','Not checked',N-nChk],['skipped','Skipped',nPass]].map(function(c){return'<button class="chip'+(wlUI.f===c[0]?' on':'')+'" data-act="wlfilter" data-v="'+c[0]+'">'+c[1]+' ('+c[2]+')</button>'}).join('')+'</div>';
   h+='<div class="panel tablewrap"><table class="tbl wlt"><thead><tr><th>Ticker</th><th>Earnings</th><th>Direction</th><th>DBL break</th><th>Cont. level</th><th>At level</th><th>Waiting for</th><th>A+</th><th>Checked</th><th>Today</th><th></th></tr></thead><tbody>';
   var lastG=null;
@@ -1067,7 +1079,7 @@ VIEWS.watchlist=function(){
   h+='</tbody></table></div>';
   var gs=Array.from(new Set(wl.rows.map(function(r){return r.group})));
   h+='<datalist id="wlgroups">'+gs.map(function(g){return'<option value="'+esc(g)+'">'}).join('')+'</datalist><div class="fbar" style="margin-top:12px"><input data-wl="ntick" placeholder="Ticker" aria-label="New ticker" style="text-transform:uppercase"><input data-wl="ngrp" list="wlgroups" placeholder="Group" aria-label="Group"><button class="btn sm" data-act="wladd">Add ticker</button></div>';
-  return'<div class="wlfull">'+h+'<p class="hint">Earnings: green = 2–5 trading days away, red = 1 day or today (☀ before open counts a day earlier). Click a row or use ↑ ↓ to highlight it. Keys work on the highlighted row: 1–4 direction · D DBL break · L level · 5–8 at level · W waiting for · A add · P pass · Enter or Esc leaves a box. Everything carries over day to day; Checked and Add/Pass start fresh each morning.</p></div>';
+  return'<div class="wlfull">'+h+'<p class="hint">Earnings: green = 2–5 trading days away, red = 1 day or today (☀ before open counts a day earlier). Weekends and market holidays are skipped. Click a row or use ↑ ↓ to highlight it. Keys work on the highlighted row: 1–4 direction · D DBL break · L level · 5–8 at level · W waiting for · A add · P pass · Enter or Esc leaves a box. Everything carries over day to day; Checked and Add/Pass start fresh each morning.</p></div>';
 };
 
 /* ---------- actions ---------- */
@@ -1093,7 +1105,8 @@ ACT.wlclearpick=function(b){var r=wlById(b.dataset.id);if(!r)return;r.pick='';r.
 ACT.wlfailclear=function(b){var r=wlById(b.dataset.id);if(!r)return;r.dbl='No';r.level='';r.at='';r.updatedAt=Date.now();wlPersist();render()};
 ACT.wlfilter=function(b){wlUI.f=b.dataset.v;wlUI.sel=null;render()};
 ACT.wlearn=function(){if(!(state.settings.fhKey||'').trim()){toast('Add your Finnhub key on the Account page first');return}wlEarnRefresh(true)};
-ACT.wldayset=function(b){var d=wlDay(),k=b.dataset.k,v=b.dataset.v;if(k==='earn')d.earnAuto=false;d[k]=d[k]===v?'':v;if(d[k]!=='Yes')d[k+'Note']='';d.updatedAt=Date.now();wlPersist();render()};
+ACT.wleadd=function(b){wlUI.edE=b.dataset.id;wlUI.sel=b.dataset.id;render();var i=document.querySelector('[data-wle="date"][data-id="'+b.dataset.id+'"]');if(i){i.focus();try{i.showPicker()}catch(x){}}};
+ACT.wldayset=function(b){var d=wlDay(),k=b.dataset.k,v=b.dataset.v;d[k]=d[k]===v?'':v;if(d[k]!=='Yes')d[k+'Note']='';d.updatedAt=Date.now();wlPersist();render()};
 ACT.wladd=function(){
   var t=$('[data-wl=ntick]').value.trim().toUpperCase(),g=$('[data-wl=ngrp]').value.trim()||'Other';if(!t)return;
   if(wl.rows.some(function(x){return x.ticker===t})){toast(t+' is already on the list');return}
@@ -1123,7 +1136,7 @@ document.addEventListener('change',function(e){
   var t=e.target,f=t.dataset&&t.dataset.wle;if(!f||!wl)return;
   var r=wlById(t.dataset.id);if(!r)return;
   if(f==='date')r.earnDate=t.value;else r.earnHour=t.value;
-  r.earnManual=true;r.updatedAt=Date.now();wlUI.sel=r.id;wlPersist();render();
+  r.earnManual=true;r.updatedAt=Date.now();wlUI.sel=r.id;if(f==='date')wlUI.edE=null;wlPersist();render();
 });
 /* dropdown picked */
 document.addEventListener('change',function(e){
@@ -1133,7 +1146,7 @@ document.addEventListener('change',function(e){
 /* typing in a box */
 document.addEventListener('input',function(e){
   var d=e.target.dataset;if(!d||!wl)return;
-  if(d.wlday){var dy=wlDay();dy[d.wlday]=e.target.value;if(d.wlday==='earnNote')dy.earnAuto=false;dy.updatedAt=Date.now();wlPersist();return}
+  if(d.wlday){var dy=wlDay();dy[d.wlday]=e.target.value;dy.updatedAt=Date.now();wlPersist();return}
   if(d.wlf){var r=wlById(d.id);if(!r)return;wlUI.sel=r.id;r[d.wlf]=e.target.value;r.updatedAt=Date.now();wlPersist();wlPatch(r)}
 });
 /* focusing a box or dropdown highlights its row */
@@ -1192,7 +1205,7 @@ async function wlExport(){
   var day=wlDay(),d=today();
   var rows=wl.rows.filter(function(r){return wlPick(r)==='add'});
   rows.sort(function(a,b){return(wlAplus(b)?1:0)-(wlAplus(a)?1:0)});
-  if(!rows.length&&!day.news&&!day.earn){toast("Nothing on today's list yet. Add tickers first.");return}
+  if(!rows.length&&!day.news&&!wlEarnWeek().length){toast("Nothing on today's list yet. Add tickers first.");return}
   function fill(hex){return{type:'pattern',pattern:'solid',fgColor:{argb:'FF'+hex}}}
   var thin={style:'thin',color:{argb:'FFB9C2B7'}};
   function box(c){c.border={top:thin,left:thin,bottom:thin,right:thin}}
@@ -1205,9 +1218,8 @@ async function wlExport(){
   val('B2',day.news||'Not checked').font={bold:true,color:{argb:day.news==='Yes'?'FFB23A32':'FF4B5B5F'}};
   ws.mergeCells('C2:J2');val('C2',day.newsNote||'');
   lab('A3','After-hours notes');ws.mergeCells('B3:J3');val('B3','','F2E7C7');ws.getRow(3).height=52;
-  lab('A4','Earnings');
-  val('B4',day.earn||'Not checked').font={bold:true,color:{argb:day.earn==='Yes'?'FFB23A32':'FF4B5B5F'}};
-  ws.mergeCells('C4:J4');val('C4',day.earnNote||'');
+  lab('A4','Earnings this week');
+  ws.mergeCells('B4:J4');val('B4',wlEarnWeekText()).font={bold:true,color:{argb:wlEarnWeek().length?'FFB23A32':'FF4B5B5F'}};
   ws.getRow(2).height=24;ws.getRow(4).height=24;
 
   var head=['Group','Ticker','Earnings','Direction','DBL break','Cont. level','At level','A+','Waiting for','After market notes'];

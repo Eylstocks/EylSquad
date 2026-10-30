@@ -1114,7 +1114,7 @@ VIEWS.watchlist=function(){
   if(!list.some(function(r){return r.id===wlUI.sel})){var u=list.find(function(r){return r.checked!==t})||list[0];wlUI.sel=u?u.id:null}
   function count(fn){return wl.rows.filter(fn).length}
   var nChk=count(function(r){return r.checked===t}),nAdd=count(function(r){return wlPick(r)==='add'}),nPass=count(function(r){return wlPick(r)==='pass'}),nAp=count(function(r){return wlAplus(r)&&r.checked===t});
-  var h='<div class="top"><div><h1>Watchlist</h1><p class="sub">'+(N&&nChk===N?'<span class="win">All '+N+' checked today ✓</span>':nChk+' of '+N+' checked today')+' · '+nAdd+' on today\'s list'+(nAp?' · <span class="win">'+nAp+' A+</span>':'')+'<span id="wlcloud">'+(wlCloud?' · '+esc(wlCloud):'')+'</span></p></div><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button class="btn" data-act="wlearn">Refresh earnings</button><input type="date" data-wlpd="1" value="'+esc(wlUI.pd||t)+'" max="'+t+'" aria-label="Day to export" title="Day to export" style="width:auto;padding:7px 8px"><button class="btn" data-act="wlcopy" title="Copy a summary image for Discord">Copy image</button><button class="btn primary" data-act="wlpdf">Save PDF</button></div></div>';
+  var h='<div class="top"><div><h1>Watchlist</h1><p class="sub">'+(N&&nChk===N?'<span class="win">All '+N+' checked today ✓</span>':nChk+' of '+N+' checked today')+' · '+nAdd+' on today\'s list'+(nAp?' · <span class="win">'+nAp+' A+</span>':'')+'<span id="wlcloud">'+(wlCloud?' · '+esc(wlCloud):'')+'</span></p></div><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button class="btn" data-act="wlearn">Refresh earnings</button><input type="date" data-wlpd="1" value="'+esc(wlUI.pd||t)+'" max="'+t+'" aria-label="Day to export" title="Day to export" style="width:auto;padding:7px 8px"><button class="btn" data-act="wlcopy" title="Copy a text summary for Discord">'+(wlUI.cq&&wlUI.cq.d===(wlUI.pd||t)?'Copy part '+(wlUI.cq.i+1)+' of '+wlUI.cq.parts.length:'Copy text')+'</button><button class="btn primary" data-act="wlpdf">Save PDF</button></div></div>';
   h+='<div class="panel" style="padding:10px 18px;margin-bottom:14px">'+wlDayRow('Any major news?','news',day)+wlEarnRow()+'</div>';
   h+='<div class="seg" style="margin-bottom:10px" role="group" aria-label="Filter">'+[['all','All',N-nPass],['today','Today\'s list',nAdd],['unchecked','Not checked',N-nChk],['skipped','Skipped',nPass]].map(function(c){return'<button class="chip'+(wlUI.f===c[0]?' on':'')+'" data-act="wlfilter" data-v="'+c[0]+'">'+c[1]+' ('+c[2]+')</button>'}).join('')+'</div>';
   h+='<div class="panel tablewrap"><table class="tbl wlt"><thead><tr><th>Ticker</th><th>Earnings</th><th>Direction</th><th>DBL break</th><th>Level</th><th>At level</th><th>Waiting for</th><th>Today</th><th></th></tr></thead><tbody>';
@@ -1374,58 +1374,51 @@ document.addEventListener('input',function(e){
 document.addEventListener('change',function(e){
   var d=e.target.dataset;if(!d)return;
   if(d.wca==='result'){var c=wc.cards[d.ck];if(!c)return;c.result=e.target.value;wcSave();render();return}
-  if(d.wlpd!=null){wlUI.pd=e.target.value||today()}
+  if(d.wlpd!=null){wlUI.pd=e.target.value||today();wlUI.cq=null;render()}
 });
 
-/* ---------- Copy image for Discord (narrow summary, no charts) ---------- */
-function wcSummaryCanvas(d){
-  var cards=wcFor(d),day=wc.days[d]||{},W=720,P=28,S=2;
-  var C={bg:'#11191C',ink:'#E6ECE8',mut:'#A9B7B5',line:'#2A373B',win:'#56C48B',loss:'#EE7B72',warn:'#D9B75B',acc:'#5CC2C9',even:'#A9B7B5'};
-  var F='"Schibsted Grotesk",system-ui,"Segoe UI",Arial,sans-serif';
-  function run(ctx){
-    var y=P;
-    function font(sz,w){ctx.font=(w||400)+' '+sz+'px '+F}
-    function wrap(txt,x,maxW,sz,col,w){font(sz,w);ctx.fillStyle=col;var lh=Math.round(sz*1.45),line='';String(txt).split(/\s+/).forEach(function(wd){var t=line?line+' '+wd:wd;if(ctx.measureText(t).width>maxW&&line){ctx.fillText(line,x,y+sz);y+=lh;line=wd}else line=t});if(line){ctx.fillText(line,x,y+sz);y+=lh}}
-    function pill(txt,x,yy,col){font(12,600);var w=ctx.measureText(txt).width+16;ctx.fillStyle=col;ctx.globalAlpha=.2;ctx.beginPath();if(ctx.roundRect)ctx.roundRect(x,yy,w,22,11);else ctx.rect(x,yy,w,22);ctx.fill();ctx.globalAlpha=1;ctx.fillText(txt,x+8,yy+15);return w}
-    function lab(l,v,col){font(13,600);ctx.fillStyle=C.mut;ctx.fillText(l,P,y+14);var lw=ctx.measureText(l).width+10;wrap(v,P+lw,W-2*P-lw,14,col||C.ink,500);y+=2}
-    function rule(){ctx.fillStyle=C.line;ctx.fillRect(P,y,W-2*P,1);y+=14}
-    font(12,700);ctx.fillStyle=C.acc;ctx.fillText('WATCHLIST',P,y+12);y+=20;
-    font(24,700);ctx.fillStyle=C.ink;ctx.fillText(wlLongDate(d),P,y+24);y+=40;
-    lab('News',day.news==='Yes'?(day.newsNote||'Yes'):day.news==='No'?'No major news':'Not checked',day.news==='Yes'?C.loss:C.ink);
-    var el=(day.earnList||[]).map(function(x){return x.t}).join(' · ');
-    lab('Earnings this week',(el||'None on watchlist')+(day.earnNote?' · Other: '+day.earnNote:''));
-    (day.mkt||[]).forEach(function(m){wrap((m.c?'🏖 ':'⏰ ')+m.t,P,W-2*P,13,C.warn,600)});
-    y+=6;rule();
-    if(!cards.length){wrap('No tickers on the list.',P,W-2*P,14,C.mut)}
-    cards.forEach(function(c,i){
-      var x=P,res=wcRes(c.result);
-      if(c.aplus)x+=pill('A+',x,y,C.win)+8;
-      font(19,700);ctx.fillStyle=C.ink;ctx.fillText(c.ticker,x,y+17);
-      if(res){font(12,600);var rw=ctx.measureText(res[1]).width+16;pill(res[1],W-P-rw,y,C[res[2]])}
-      y+=28;
-      var su=wcSetup(c);if(c.earn)su+=(su?' · ':'')+'Earnings '+c.earn;
-      if(su)wrap(su,P,W-2*P,13,C.mut,500);
-      wrap('Plan: '+(c.plan||'—'),P,W-2*P,14,C.ink);
-      if(c.after)wrap('After: '+c.after,P,W-2*P,14,C.mut);
-      y+=8;if(i<cards.length-1)rule();
-    });
-    y+=10;font(11,500);ctx.fillStyle=C.mut;ctx.fillText('No Face Trade Journal',P,y+11);y+=11+P;
-    return y;
-  }
-  var H=run(document.createElement('canvas').getContext('2d'));
-  var cv=document.createElement('canvas');cv.width=W*S;cv.height=H*S;
-  var ctx=cv.getContext('2d');ctx.scale(S,S);ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);run(ctx);
-  return cv;
+/* ---------- Copy text for Discord (split into parts over 2,000 characters) ---------- */
+function wcEsc(t){return String(t||'').replace(/([\\*_~`|>])/g,'\\$1')}
+function wcTextParts(d){
+  var cards=wcFor(d),day=wc.days[d]||{},head=[],blocks=[];
+  head.push('**📋 WATCHLIST · '+wlLongDate(d)+'**');
+  head.push('**News:** '+(day.news==='Yes'?'🔴 '+wcEsc(day.newsNote||'Yes'):day.news==='No'?'No major news':'Not checked'));
+  var el=(day.earnList||[]).map(function(x){return wcEsc(x.t)}).join(' · ');
+  head.push('**Earnings this week:** '+(el||'None on watchlist')+(day.earnNote?' · Other: '+wcEsc(day.earnNote):''));
+  (day.mkt||[]).forEach(function(m){head.push((m.c?'🏖 ':'⏰ ')+m.t)});
+  if(!cards.length)blocks.push('No tickers on the list.');
+  cards.forEach(function(c){
+    var dot={up:'🟢 ',down:'🔴 ',rup:'🟡 ',rdown:'🟡 '}[c.dir]||'',res=wcRes(c.result),su=wcSetup(c).replace('DBL break','DBL');
+    if(c.earn)su+=(su?' · ':'')+'Earnings '+c.earn;
+    var l=[dot+'**'+c.ticker+'**'+(c.aplus?' `A+`':'')+(su?' — '+wcEsc(su):'')];
+    l.push('↳ Plan: '+(c.plan?wcEsc(c.plan):'—'));
+    if(c.after||res)l.push('↳ After: '+(c.after?wcEsc(c.after):'—')+(res?' · **'+res[1]+'**':''));
+    blocks.push(l.join('\n'));
+  });
+  var parts=[],cur=head.join('\n');
+  blocks.forEach(function(bk){if((cur+'\n\n'+bk).length>1900){parts.push(cur);cur=bk}else cur+='\n\n'+bk});
+  parts.push(cur);
+  if(parts.length>1)parts=parts.map(function(p,i){return p+'\n*('+(i+1)+'/'+parts.length+')*'});
+  return parts;
 }
-function wcPngDownload(cv,d){cv.toBlob(function(b){var u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download='watchlist-'+d+'.png';document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(u)},4000);toast('Copying isn\'t allowed here, so the image was downloaded instead')},'image/png')}
+function wcCopy(txt){
+  if(navigator.clipboard&&navigator.clipboard.writeText)return navigator.clipboard.writeText(txt).catch(function(){return wcCopyOld(txt)});
+  return wcCopyOld(txt);
+}
+function wcCopyOld(txt){return new Promise(function(res,rej){var t=document.createElement('textarea');t.value=txt;t.style.position='fixed';t.style.opacity='0';document.body.appendChild(t);t.select();var ok=false;try{ok=document.execCommand('copy')}catch(x){}t.remove();ok?res():rej()})}
 ACT.wlcopy=function(){
   var d=wlUI.pd||today();if(d===today())wcLive();
   if(d!==today()&&!wcFor(d).length&&!wc.days[d]){toast('Nothing was saved for '+fmtDate(d));return}
-  var cv=wcSummaryCanvas(d);
-  try{
-    if(!navigator.clipboard||!window.ClipboardItem)throw 0;
-    navigator.clipboard.write([new ClipboardItem({'image/png':new Promise(function(r){cv.toBlob(r,'image/png')})})]).then(function(){toast('Image copied. Paste it into Discord with Ctrl+V')}).catch(function(){wcPngDownload(cv,d)});
-  }catch(x){wcPngDownload(cv,d)}
+  var q=wlUI.cq;
+  if(!q||q.d!==d||q.i>=q.parts.length)q=wlUI.cq={d:d,parts:wcTextParts(d),i:0};
+  var n=q.parts.length,i=q.i;
+  wcCopy(q.parts[i]).then(function(){
+    q.i++;
+    if(n===1){wlUI.cq=null;toast('Copied. Paste it into Discord with Ctrl+V')}
+    else if(q.i<n)toast('Copied part '+(i+1)+' of '+n+'. Paste it, then click Copy text again for part '+(i+2));
+    else{wlUI.cq=null;toast('Copied part '+n+' of '+n+'. Paste it into Discord')}
+    var bt=document.querySelector('[data-act="wlcopy"]');if(bt)bt.textContent=wlUI.cq?'Copy part '+(wlUI.cq.i+1)+' of '+n:'Copy text';
+  }).catch(function(){toast("Couldn't copy here. Try again after clicking on the page")});
 };
 
 /* ---------- Save PDF (print → Save as PDF) ---------- */

@@ -882,6 +882,7 @@ document.head.insertAdjacentHTML('beforeend','<style>'+
 '.wlt .wlep{border:0;cursor:pointer;font-family:inherit;white-space:nowrap}.wlt .wlep:hover{filter:brightness(.95)}'+
 '.wlt input:disabled,.wlt select:disabled{opacity:.45}'+
 '.wlt .btn.sm{padding:4px 10px}'+
+'.wlhelp{margin-top:18px;font-size:13px;color:var(--ink2)}.wlhelp summary{cursor:pointer;font-weight:600;color:var(--ink)}.wlhelp dl{display:grid;grid-template-columns:130px 1fr;gap:6px 14px;margin:10px 0 0}.wlhelp dt{font-weight:600;color:var(--ink)}.wlhelp dd{margin:0}@media (max-width:820px){.wlhelp dl{grid-template-columns:1fr}}'+                                
 '.wlt .wled{width:132px}.wlt .wleh{min-width:46px}'+
 '.wlt .wspk{min-width:76px}.wlt tr.wlA td:first-child{box-shadow:inset 3px 0 0 var(--win)}.wlt tr.wlA.wlon td:first-child{box-shadow:inset 3px 0 0 var(--accent)}'+
 '.wlt .wllast{font-size:11.5px;color:var(--muted);margin-left:4px}'+
@@ -1107,6 +1108,18 @@ function wlDayRow(label,k,d){
   var v=d[k];
   return'<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:5px 0"><span style="min-width:150px;font-weight:500">'+label+'</span><div class="seg">'+['Yes','No'].map(function(o){return'<button class="chip'+(v===o?' on':'')+'" data-act="wldayset" data-k="'+k+'" data-v="'+o+'" aria-pressed="'+(v===o)+'">'+o+'</button>'}).join('')+'</div>'+(v===''?'<span class="pill warn">Not checked yet</span>':'')+(v==='Yes'?'<input data-wlday="'+k+'Note" value="'+esc(d[k+'Note'])+'" placeholder="What is it? e.g. FOMC 2pm" aria-label="'+label+' note" style="flex:1 1 220px;max-width:420px" autocomplete="off">':'')+'</div>';
 }
+
+  function wlHelp(){
+  var rows=[
+    ['Daily routine','Set each ticker to Add or Pass in the Today column. Setups carry over from day to day; Add and Pass reset each morning.'],
+    ['Keyboard','↑ ↓ select a row · 1–4 direction · D DBL break · L level · 5–8 at level · W waiting for · A add · P pass · Enter or Esc leaves a field.'],
+    ['Earnings','Green: 2–5 trading days away. Red: today or tomorrow (☀ before the open counts one day earlier). Weekends and market holidays are skipped.'],
+    ['Charts','Click the ☀ or ☾ box on a card, then paste with Ctrl+V. If no box is selected, the paste goes to ☀ before 9:30am and ☾ after 4pm. Charts stay on this PC and are deleted after 14 days.'],
+    ['History','Click a ticker name to see its past plans, charts and results.'],
+    ['Sharing','Copy text posts a summary to Discord. Save PDF creates the full report with charts.']
+  ];
+  return'<details class="wlhelp"><summary>How this page works</summary><dl>'+rows.map(function(r){return'<dt>'+r[0]+'</dt><dd>'+r[1]+'</dd>'}).join('')+'</dl></details>';
+}
 VIEWS.watchlist=function(){
   wlEnsure();
   if(!wl)return'<div class="top"><div><h1>Watchlist</h1></div></div><p class="mut">Loading…</p>';
@@ -1126,7 +1139,7 @@ VIEWS.watchlist=function(){
   h+='<datalist id="wlgroups">'+gs.map(function(g){return'<option value="'+esc(g)+'">'}).join('')+'</datalist><div class="fbar" style="margin-top:12px"><input data-wl="ntick" placeholder="Ticker" aria-label="New ticker" style="text-transform:uppercase"><input data-wl="ngrp" list="wlgroups" placeholder="Group" aria-label="Group"><button class="btn sm" data-act="wladd">Add ticker</button></div>';
   h+=wcSection();
   if(wlUI.hist)h+=wcHistPanel();
-  return'<div class="wlfull">'+h+'<p class="hint">Earnings: green = 2–5 trading days away, red = 1 day or today (☀ before open counts a day earlier). Weekends and market holidays are skipped. Click a row or use ↑ ↓ to highlight it. Keys work on the highlighted row: 1–4 direction · D DBL break · L level · 5–8 at level · W waiting for · A add · P pass (or use the Today dropdown; set it back to — to undo) · Enter or Esc leaves a box. Everything carries over day to day; Add/Pass start fresh each morning. Charts: click a ☀ or ☾ box, then Ctrl+V. With no box picked, a paste goes to ☀ before 9:30am and ☾ after 4pm for the highlighted ticker. Charts stay on this PC and are deleted after 14 days. Click a ticker name to see its history.</p></div>';
+  return'<div class="wlfull">'+h+wlHelp()+'</div>';
 };
 
 /* ---------- actions ---------- */

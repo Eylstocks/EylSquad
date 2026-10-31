@@ -185,6 +185,21 @@ main{padding:18px 14px 80px}
 .orow-act{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
 .tbl .dgh td{background:var(--bg);padding:14px 7px 6px;font-size:12.5px;font-weight:600;color:var(--ink2)}
 .tbl .dgh td>div{display:flex;justify-content:space-between;gap:12px}
+.acprof{display:grid;grid-template-columns:1fr 1fr auto;gap:16px;align-items:center;padding:14px 18px;max-width:900px}
+.acprof-act{display:flex;gap:8px;flex-wrap:wrap}
+.tbl .mgh td{background:var(--bg);padding:12px 7px;cursor:pointer}
+.tbl .mgh:hover td{background:var(--hover)}
+.tbl .mgh td>div{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.mgh-t{font-weight:600}.mgh-s{display:flex;gap:14px;flex-wrap:wrap;font-size:13px;color:var(--ink2)}
+.lists{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.lcol{padding:14px 16px}.lcol h3{font-size:14px;font-weight:600;margin:0 0 8px}
+.lcol ul{list-style:none;margin:0 0 10px;padding:0}
+.lcol li{display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid var(--line);font-size:14px;min-height:36px}
+.lcol li:last-child{border-bottom:0}.lname{flex:1}.lcol li input{flex:1;padding:4px 8px}
+.lact{display:flex;opacity:.55}.lcol li:hover .lact,.lact:focus-within{opacity:1}
+.lact .icon{font-size:14px;line-height:1;width:26px;height:26px;padding:0;display:inline-flex;align-items:center;justify-content:center}
+.lact .icon:disabled{opacity:.3;cursor:default}
+@media (max-width:820px){.acprof{grid-template-columns:1fr}}
 .fbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 0 10px}
 .fbar input,.fbar select{width:auto;min-width:0;padding:6px 10px;font-size:13px}
 .fbar input{flex:1 1 180px;max-width:260px}
@@ -213,7 +228,6 @@ main{padding:18px 14px 80px}
     <button class="navb" data-go="watchlist">Watchlist</button>
     <button class="navb" data-go="form">New trade</button>
     <button class="navb" data-go="account">Account</button>
-    <button class="navb" data-act="signout" id="signoutbtn" hidden>Sign out</button>
     <p class="note">All times are New York time.</p>
     <p class="note" id="cloudstat" style="margin-top:6px"></p>
   </nav>
@@ -735,14 +749,91 @@ VIEWS.deleted=function(){
 
 /* account */
 var cashDraft=null;
+/* ---------- account: profile, ledger by month, lists ---------- */
+var acct={filter:'all',open:{},edit:null};
+function profileSection(){
+  var u=window.auth&&window.auth.currentUser;
+  if(!u)return'<div class="sec"><h2>Profile</h2><p class="mut">Not signed in. Your journal is saved on this device only.</p></div>';
+  return'<div class="sec"><h2>Profile</h2><div class="panel acprof"><div><p class="k">Signed in as</p><p style="font-weight:600">'+esc(u.email||'')+'</p></div><div><p class="k">Cloud sync</p><p id="acsync">'+esc(cloudText||'Not synced yet')+'</p></div><div class="acprof-act"><button class="btn" data-act="syncnow">Sync now</button><button class="btn" data-act="signout">Sign out</button></div></div></div>';
+}
+function monthName(m){return new Date(m+'-01T12:00:00').toLocaleDateString('en-US',{month:'long',year:'numeric'})}
+function ledgerSection(){
+  var all=ledger(),cur=nyNow().date.slice(0,7),f=acct.filter,months={};
+  if(!all.length)return'<div class="sec"><h2>Ledger</h2><p class="mut">No entries yet. Start with your first deposit.</p></div>';
+  all.forEach(function(r){
+    var m=r.date.slice(0,7),g=months[m]||(months[m]={dep:0,wd:0,pl:0,fee:0,end:0,rows:[]});
+    if(r.kind==='deposit')g.dep+=r.amount;else if(r.kind==='withdraw')g.wd+=r.amount;else if(r.kind==='trade')g.pl+=r.amount;else g.fee+=r.amount;
+    g.end=r.balance;
+    if(f==='all'||(f==='cash')===(r.kind==='deposit'||r.kind==='withdraw'))g.rows.push(r);
+  });
+  var keys=Object.keys(months).sort().reverse().filter(function(m){return months[m].rows.length});
+  function part(label,v,cls){return v?'<span>'+label+' <b class="'+cls+'">'+sMoney(v)+'</b></span>':''}
+  var h='<div class="sec"><div class="curvehead"><h2 style="margin:0">Ledger</h2><div class="seg" role="group" aria-label="Show">'+[['all','All'],['cash','Deposits and withdrawals'],['trades','Trades and fees']].map(function(o){return'<button class="chip'+(f===o[0]?' on':'')+'" data-act="acfilter" data-v="'+o[0]+'">'+o[1]+'</button>'}).join('')+'</div></div>';
+  if(!keys.length)return h+'<p class="mut">No entries match this filter.</p></div>';
+  h+='<div class="panel tablewrap"><table class="tbl"><thead><tr><th>Date</th><th>Entry</th><th class="n">Amount</th><th class="n">Balance</th><th></th></tr></thead><tbody>';
+  keys.forEach(function(m){
+    var g=months[m],open=m in acct.open?acct.open[m]:m===cur;
+    h+='<tr class="mgh" data-act="acmonth" data-m="'+m+'" tabindex="0" aria-expanded="'+open+'"><td colspan="5"><div><span class="mgh-t">'+(open?'▾':'▸')+' '+monthName(m)+'</span><span class="mgh-s">'+part('Deposits',g.dep,'win')+part('Withdrawals',g.wd,'loss')+part('Trading',g.pl,plCls(g.pl))+part('Fees',g.fee,'loss')+'<span>Month-end balance <b>'+money(g.end)+'</b></span></span></div></td></tr>';
+    if(!open)return;
+    g.rows.slice().reverse().forEach(function(r){
+      h+='<tr><td>'+fmtDate(r.date)+'</td><td>'+esc(r.label)+(r.note?' <span class="mut">· '+esc(r.note)+'</span>':'')+'</td><td class="n '+(r.amount<0?'loss':'win')+'">'+sMoney(r.amount)+'</td><td class="n">'+money(r.balance)+'</td><td style="text-align:right;white-space:nowrap">'+(r.cash?'<button class="icon" data-act="cashedit" data-id="'+r.cash.id+'" aria-label="Edit entry" title="Edit">'+ICON.edit+'</button><button class="icon" data-act="cashdel" data-id="'+r.cash.id+'" aria-label="Delete entry" title="Delete">'+ICON.trash+'</button>':'<button class="btn link" data-act="opentrade" data-id="'+r.id+'">View</button>')+'</td></tr>';
+    });
+  });
+  return h+'</tbody></table></div></div>';
+}
+var LISTS=[['setups','Setups','setup'],['tags','Mistake tags','tags'],['emotions','Emotions','emotion']];
+function listsSection(){
+  var h='<div class="sec"><h2>Lists</h2><p class="hint" style="margin:-4px 0 12px">These are the choices on the trade form. Renaming updates every past trade. Removing hides the choice; past trades keep it.</p><div class="lists">';
+  LISTS.forEach(function(L){
+    var k=L[0],items=state.lists[k]||[];
+    h+='<div class="panel lcol"><h3>'+L[1]+' <span class="k">'+items.length+'</span></h3><ul>'+items.map(function(v,i){
+      var ed=acct.edit&&acct.edit.k===k&&acct.edit.v===v;
+      return'<li>'+(ed?'<input data-lren="'+k+'" data-old="'+esc(v)+'" value="'+esc(v)+'" aria-label="Rename '+esc(v)+'">':'<span class="lname">'+esc(v)+'</span>')+
+        '<span class="lact"><button class="icon" data-act="lmove" data-k="'+k+'" data-i="'+i+'" data-d="-1" aria-label="Move up" title="Move up"'+(i===0?' disabled':'')+'>↑</button><button class="icon" data-act="lmove" data-k="'+k+'" data-i="'+i+'" data-d="1" aria-label="Move down" title="Move down"'+(i===items.length-1?' disabled':'')+'>↓</button><button class="icon" data-act="lrename" data-k="'+k+'" data-v="'+esc(v)+'" aria-label="Rename" title="Rename">'+ICON.edit+'</button><button class="icon" data-act="lremove" data-k="'+k+'" data-v="'+esc(v)+'" aria-label="Remove" title="Remove">'+ICON.trash+'</button></span></li>';
+    }).join('')+'</ul><input data-ladd="'+k+'" placeholder="Add '+L[2].replace(/s$/,'')+'" aria-label="Add to '+L[1]+'"></div>';
+  });
+  return h+'</div></div>';
+}
+function listTomb(k,v,on){state.purged['list:'+k+':'+v]=on?Date.now():-Date.now()}
+function listAdd(k,v){
+  v=v.trim();if(!v)return;var l=state.lists[k];
+  if(l.indexOf(v)>-1){toast('"'+v+'" is already on the list');return}
+  l.push(v);if(state.purged['list:'+k+':'+v]>0)listTomb(k,v,false);save();render();
+}
+function listRename(k,from,to){
+  to=to.trim();acct.edit=null;if(!to||to===from){render();return}
+  var l=state.lists[k],i=l.indexOf(from);if(i<0){render();return}
+  if(l.indexOf(to)>-1)l.splice(i,1);else l[i]=to;
+  listTomb(k,from,true);if(state.purged['list:'+k+':'+to]>0)listTomb(k,to,false);
+  var n=0,now=Date.now();
+  state.trades.forEach(function(t){
+    var hit=false;
+    if(k==='setups'&&t.setup===from){t.setup=to;hit=true}
+    if(k==='emotions'&&t.emotion===from){t.emotion=to;hit=true}
+    if(k==='tags'&&(t.tags||[]).indexOf(from)>-1){t.tags=t.tags.map(function(g){return g===from?to:g}).filter(function(g,j,a){return a.indexOf(g)===j});hit=true}
+    if(hit){t.updatedAt=now;n++}
+  });
+  if(k==='setups'&&state.settings.lastSetup===from)state.settings.lastSetup=to;
+  save();render();toast('Renamed to "'+to+'"'+(n?' on '+plural(n,'trade'):''));
+}
+document.addEventListener('keydown',function(e){
+  var t=e.target,d=t.dataset||{};
+  if(d.ladd&&e.key==='Enter'){e.preventDefault();listAdd(d.ladd,t.value)}
+  else if(d.lren&&e.key==='Enter'){e.preventDefault();listRename(d.lren,d.old,t.value)}
+  else if(d.lren&&e.key==='Escape'){acct.edit=null;render()}
+});
+document.addEventListener('focusout',function(e){var d=e.target.dataset||{};if(d.lren&&acct.edit)listRename(d.lren,d.old,e.target.value)});
+
 VIEWS.account=function(){
   if(!cashDraft)cashDraft={id:null,type:'deposit',date:nyNow().date,amount:'',note:''};
   var c=cashDraft,led=ledger().slice().reverse(),years=Array.from(new Set(live().map(function(t){return calc(t)}).filter(function(x){return x.closed}).map(function(x){return x.closeDate.slice(0,4)})));
   var cy=nyNow().date.slice(0,4);if(years.indexOf(cy)<0)years.push(cy);years.sort().reverse();
   var h='<div class="top"><div><h1>Account</h1><p class="sub">Your balance is deposits and withdrawals plus closed trades, minus fees.</p></div></div>';
+  h+=profileSection();
   h+='<div class="sec"><h2>'+(c.id?'Edit entry':'Deposit or withdraw')+'</h2><div class="grid" style="align-items:end;max-width:760px"><div><p class="k" style="margin-bottom:4px">Type</p><div class="seg"><button class="chip'+(c.type==='deposit'?' on':'')+'" data-act="cashtype" data-v="deposit">Deposit</button><button class="chip'+(c.type==='withdraw'?' on':'')+'" data-act="cashtype" data-v="withdraw">Withdraw</button></div></div><label class="f"><span>Date</span><input data-cash="date" type="date" value="'+esc(c.date)+'"></label><label class="f"><span>Amount</span><input data-cash="amount" type="number" min="0" step="any" inputmode="decimal" value="'+esc(c.amount)+'"></label><label class="f"><span>Note (optional)</span><input data-cash="note" value="'+esc(c.note)+'"></label></div><div id="cerr" class="loss hint"></div><div style="display:flex;gap:8px;margin-top:8px"><button class="btn primary" data-act="cashsave">'+(c.id?'Save changes':'Add entry')+'</button>'+(c.id?'<button class="btn" data-act="cashcancel">Cancel</button>':'')+'</div></div>';
-  h+='<div class="sec"><h2>Ledger</h2>'+(led.length?'<div class="panel tablewrap"><table class="tbl"><thead><tr><th>Date</th><th>Entry</th><th class="n">Amount</th><th class="n">Balance</th><th></th></tr></thead><tbody>'+led.map(function(r){return'<tr><td>'+fmtDate(r.date)+'</td><td>'+esc(r.label)+(r.note?' <span class="mut">· '+esc(r.note)+'</span>':'')+'</td><td class="n '+(r.amount<0?'loss':'win')+'">'+sMoney(r.amount)+'</td><td class="n">'+money(r.balance)+'</td><td style="text-align:right">'+(r.cash?'<button class="icon" data-act="cashedit" data-id="'+r.cash.id+'" aria-label="Edit entry">'+ICON.edit+'</button><button class="icon" data-act="cashdel" data-id="'+r.cash.id+'" aria-label="Delete entry">'+ICON.trash+'</button>':'<button class="btn link" data-act="opentrade" data-id="'+r.id+'">View</button>')+'</td></tr>'}).join('')+'</tbody></table></div>':'<p class="mut">No entries yet. Start with your first deposit.</p>')+'</div>';
+  h+=ledgerSection();
   h+='<div class="sec"><h2>Settings</h2><label class="f" style="max-width:220px"><span>Default fee per contract</span><input data-set="fee" type="number" min="0" step="any" value="'+esc(state.settings.fee)+'"></label><p class="hint">Applies to new executions. You can change it on any trade.</p><label class="f" style="max-width:420px;margin-top:14px"><span>Finnhub API key (earnings dates)</span><input data-set="fhKey" type="password" autocomplete="off" value="'+esc(state.settings.fhKey||'')+'"></label><p class="hint">Saved on this device. Earnings refresh once a day when the journal opens.</p></div>';
+  h+=listsSection();
   h+='<div class="sec"><h2>Export and backup</h2>'+(downloads?'':'<p class="hint" style="margin:0 0 10px">Downloads aren\'t available in this view.</p>')+'<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end"><label class="f" style="width:110px"><span>Year</span><select id="csvyear">'+years.map(function(y){return'<option>'+y+'</option>'}).join('')+'</select></label><button class="btn" data-act="csv"'+(downloads?'':' disabled')+'>Export yearly CSV</button><button class="btn" data-act="backup"'+(downloads?'':' disabled')+'>Back up everything</button><label class="btn" style="cursor:pointer">Restore from backup<input type="file" accept=".json,application/json" data-act="restorefile" style="display:none"></label><button class="btn" data-act="shrinkimgs">Shrink saved screenshots</button></div><p class="hint">The CSV lists closed trades for the year. The backup includes trades, deposits, screenshots and the watchlist.'+(state.settings.lastBackup?' Last backup: '+fmtDate(state.settings.lastBackup)+'.':' You haven\'t backed up yet.')+'</p>'+
     (pendingRestore?'<div class="callout" style="margin-top:12px"><span>Replace your current journal with this backup ('+pendingRestore.state.trades.length+' trades, '+pendingRestore.state.cash.length+' cash entries)?</span><span><button class="btn sm danger" data-act="restoreyes">Replace</button> <button class="btn sm" data-act="restoreno">Cancel</button></span></div>':'')+'</div>';
   return h;
@@ -819,6 +910,17 @@ var ACT={
   restorefile:function(b){var f=b.files[0];b.value='';if(!f)return;f.text().then(function(txt){var j=JSON.parse(txt);if(j.app!=='trade-journal'||!j.state||!Array.isArray(j.state.trades))throw 0;pendingRestore=j;render()}).catch(function(){toast("That file isn't a journal backup")})},
   restoreyes:doRestore,restoreno:function(){pendingRestore=null;render()}
 };
+/* account actions */
+ACT.syncnow=function(){if(window.syncNow){window.syncNow();toast('Syncing…')}};
+ACT.acfilter=function(b){acct.filter=b.dataset.v;render()};
+ACT.acmonth=function(b){var m=b.dataset.m,cur=nyNow().date.slice(0,7),open=m in acct.open?acct.open[m]:m===cur;acct.open[m]=!open;render()};
+ACT.lmove=function(b){var l=state.lists[b.dataset.k],i=+b.dataset.i,j=i+(+b.dataset.d);if(j<0||j>=l.length)return;var x=l[i];l[i]=l[j];l[j]=x;save();render()};
+ACT.lrename=function(b){acct.edit={k:b.dataset.k,v:b.dataset.v};render();var i=document.querySelector('[data-lren]');if(i){i.focus();i.select()}};
+ACT.lremove=function(b){
+  var k=b.dataset.k,v=b.dataset.v,l=state.lists[k],i=l.indexOf(v);if(i<0)return;
+  l.splice(i,1);listTomb(k,v,true);save();render();
+  toast('Removed "'+v+'"',function(){l.splice(i,0,v);listTomb(k,v,false);save();render()});
+};
 document.addEventListener('click',function(e){
   var g=e.target.closest('[data-go]');
   if(g){if(g.dataset.go==='form'){if(view.name==='form'&&draft&&!draft.id){return}draft=null}go(g.dataset.go);return}
@@ -854,12 +956,21 @@ document.addEventListener('drop',function(e){if(view.name!=='form')return;e.prev
 
 /* cloud sync */
 var syncBusy=false,syncAgain=false;
-function setCloud(t){var el=document.getElementById('cloudstat');if(el)el.textContent=t}
+var cloudText='';
+function setCloud(t){cloudText=t;var el=document.getElementById('cloudstat');if(el)el.textContent=t;var a=document.getElementById('acsync');if(a)a.textContent=t||'Not synced yet'}
 function unionList(a,b){var r=(a||[]).slice();(b||[]).forEach(function(x){if(r.indexOf(x)<0)r.push(x)});return r}
 function mergeById(a,b,purged){var m={};[a||[],b||[]].forEach(function(list){list.forEach(function(x){if(!x||purged[x.id])return;var c=m[x.id];if(!c||(x.updatedAt||0)>(c.updatedAt||0))m[x.id]=x})});return Object.keys(m).map(function(k){return m[k]})}
+/* List tombstones live in purged as "list:<kind>:<name>": a positive time means removed, a negative time means added back. The later change wins. */
+function mergePurged(a,b){
+  var m=Object.assign({},a||{},b||{});
+  Object.keys(a||{}).forEach(function(k){if(k.indexOf('list:')===0&&b&&k in b&&Math.abs(a[k])>Math.abs(b[k]))m[k]=a[k]});
+  return m;
+}
+function listAlive(purged,kind){return function(v){return!(purged['list:'+kind+':'+v]>0)}}
 function mergeRemote(local,remote){
-  var r=remote||{},rl=r.lists||{},purged=Object.assign({},r.purged||{},local.purged||{});
-  return{trades:mergeById(local.trades,r.trades,purged),cash:mergeById(local.cash,r.cash,purged),lists:{setups:unionList(local.lists.setups,rl.setups),tags:unionList(local.lists.tags,rl.tags),emotions:unionList(local.lists.emotions,rl.emotions)},purged:purged};
+  var r=remote||{},rl=r.lists||{},purged=mergePurged(r.purged,local.purged);
+  function lst(k){return unionList(local.lists[k],rl[k]).filter(listAlive(purged,k))}
+  return{trades:mergeById(local.trades,r.trades,purged),cash:mergeById(local.cash,r.cash,purged),lists:{setups:lst('setups'),tags:lst('tags'),emotions:lst('emotions')},purged:purged};
 }
 function canon(v){if(Array.isArray(v))return'['+v.map(canon).join(',')+']';if(v&&typeof v==='object')return'{'+Object.keys(v).sort().map(function(k){return JSON.stringify(k)+':'+canon(v[k])}).join(',')+'}';return JSON.stringify(v)}
 function normBody(b){var byId=function(x,y){return String(x.id).localeCompare(String(y.id))};return{trades:(b.trades||[]).slice().sort(byId),cash:(b.cash||[]).slice().sort(byId),lists:{setups:(b.lists&&b.lists.setups)||[],tags:(b.lists&&b.lists.tags)||[],emotions:(b.lists&&b.lists.emotions)||[]},purged:b.purged||{}}}
@@ -1550,8 +1661,7 @@ ACT.wlpdf=async function(){
     // Auth State Monitor
     onAuthStateChanged(window.auth, (user) => {
       const overlay = document.getElementById("login-overlay");
-      const so = document.getElementById("signoutbtn");
-      if (so) so.hidden = !user;
+      if (window.state && window.view && window.view.name === "account" && window.render) window.render();
       if (user) {
         console.log("Authenticated as:", user.email);
         overlay.style.display = "none";

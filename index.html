@@ -183,6 +183,8 @@ main{padding:18px 14px 80px}
 .orow{display:grid;grid-template-columns:1fr 1.4fr 1.6fr 236px;gap:12px;align-items:center;padding:12px 16px;border-top:1px solid var(--line)}
 .orow:first-child{border-top:0}
 .orow-act{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.tbl .dgh td{background:var(--bg);padding:14px 7px 6px;font-size:12.5px;font-weight:600;color:var(--ink2)}
+.tbl .dgh td>div{display:flex;justify-content:space-between;gap:12px}
 .fbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 0 10px}
 .fbar input,.fbar select{width:auto;min-width:0;padding:6px 10px;font-size:13px}
 .fbar input{flex:1 1 180px;max-width:260px}
@@ -444,6 +446,67 @@ function filterBar(total,shown){
   function opt(v,l,cur){return'<option value="'+esc(v)+'"'+(cur===v?' selected':'')+'>'+esc(l)+'</option>'}
   return'<div class="fbar"><input type="search" data-tf="q" value="'+esc(tf.q)+'" placeholder="Search symbol" aria-label="Search by symbol" autocomplete="off"><select data-tf="result" aria-label="Filter by result">'+opt('','All results',tf.result)+opt('open','Open',tf.result)+opt('win','Win',tf.result)+opt('loss','Loss',tf.result)+opt('even','Even',tf.result)+'</select><select data-tf="setup" aria-label="Filter by setup">'+opt('','All setups',tf.setup)+state.lists.setups.map(function(v){return opt(v,v,tf.setup)}).join('')+'</select><select data-tf="tag" aria-label="Filter by mistake">'+opt('','All mistakes',tf.tag)+state.lists.tags.map(function(v){return opt(v,v,tf.tag)}).join('')+'</select>'+(on?'<button class="btn sm" data-act="clearfilters">Clear</button><span class="k">Showing '+shown+' of '+total+'</span>':'')+'</div>';
 }
+/* ---------- dashboard: session summary, trade table ---------- */
+function longDate(d){return new Date(d+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'})}
+function holdShort(sec){
+  if(sec<60)return sec+'s';var m=Math.floor(sec/60);if(m<60)return m+'m';
+  var h=Math.floor(m/60);m%=60;if(h<24)return h+'h'+(m?' '+m+'m':'');
+  var d=Math.floor(h/24);h%=24;return d+'d'+(h?' '+h+'h':'');
+}
+function positionLabel(t){return t.market==='option'?cap(t.dir)+' '+(+t.strike):cap(t.dir)}
+function rowDate(c){return c.closed?c.closeDate:c.openDate}
+function rowKey(c){var x=c.closed?c.ex[c.ex.length-1]:c.ex[0];return x?x.date+x.time:''}
+function plCls(n){return n>0?'win':n<0?'loss':'mut'}
+function sessionStrip(all){
+  var t=nyNow().date,wk=addDays(t,-((new Date(t+'T12:00:00').getDay()+6)%7)),mo=t.slice(0,7),closed=ascClosed(all),byDay={};
+  closed.forEach(function(x){byDay[x.c.closeDate]=(byDay[x.c.closeDate]||0)+x.c.net});
+  function agg(f){var l=closed.filter(f);return{n:l.length,net:sum(l,function(x){return x.c.net})}}
+  var td=agg(function(x){return x.c.closeDate===t}),wkA=agg(function(x){return x.c.closeDate>=wk&&x.c.closeDate<=t});
+  var st=0,sign=0;
+  for(var i=closed.length-1;i>=0;i--){var s=Math.sign(closed[i].c.net);if(!s)continue;if(!sign)sign=s;if(s!==sign)break;st++}
+  var days=Object.keys(byDay).filter(function(d){return d.slice(0,7)===mo}),best=null,worst=null;
+  days.forEach(function(d){var v=byDay[d];if(v>0&&(!best||v>best.v))best={d:d,v:v};if(v<0&&(!worst||v<worst.v))worst={d:d,v:v}});
+  function cell(label,val,cls,sub){return'<div><p class="k">'+label+'</p><p class="big2 '+cls+'">'+val+'</p><p class="k">'+sub+'</p></div>'}
+  return'<p class="grp">Session · closed trades, before fees</p><div class="panel strip">'+
+    cell('Today',td.n?sMoney(td.net):'—',td.n?plCls(td.net):'mut',td.n?plural(td.n,'trade'):'No closed trades')+
+    cell('This week',wkA.n?sMoney(wkA.net):'—',wkA.n?plCls(wkA.net):'mut',wkA.n?plural(wkA.n,'trade'):'No closed trades')+
+    cell('Streak',st?st+' '+(sign>0?(st===1?'win':'wins'):(st===1?'loss':'losses')):'—',st?(sign>0?'win':'loss'):'mut','Most recent trades')+
+    cell('Best day this month',best?sMoney(best.v):'—',best?'win':'mut',best?longDate(best.d):'No green days yet')+
+    cell('Worst day this month',worst?sMoney(worst.v):'—',worst?'loss':'mut',worst?longDate(worst.d):'No red days yet')+'</div>';
+}
+function costliestMistake(all){
+  var mo=nyNow().date.slice(0,7),list=ascClosed(all).filter(function(x){return x.c.closeDate.slice(0,7)===mo});
+  var g=groupBy(list,function(x){return x.t.tags||[]}).filter(function(g){return g.net<0}).sort(function(a,b){return a.net-b.net})[0];
+  return g?'<p class="hint" style="margin:-6px 0 16px">Costliest mistake this month: <b class="loss">'+esc(g.k)+'</b> · '+sMoney(g.net)+' across '+plural(g.n,'trade')+'</p>':'';
+}
+var showOlder=false;
+function tradeRow(x){
+  var t=x.t,c=x.c,cls=c.result==='win'?'win':c.result==='loss'?'loss':'mut';
+  var plan=!c.closed?'<span class="mut">—</span>':t.followed===true?'<span class="win">Yes</span>':t.followed===false?'<span class="loss">No</span>':'<span class="mut">Not set</span>';
+  var tags=(t.tags||[]).slice(0,2).map(function(g){return'<span class="chip static">'+esc(g)+'</span>'}).join(' ')+((t.tags||[]).length>2?' <span class="mut">+'+(t.tags.length-2)+'</span>':'');
+  return'<tr data-open="'+t.id+'" tabindex="0"><td class="sym">'+esc(t.symbol)+'</td><td><span class="pill '+c.result+'">'+({win:'Win',loss:'Loss',even:'Even',open:'Open'})[c.result]+'</span></td><td>'+esc(positionLabel(t))+'</td><td>'+(c.closed?holdShort(c.holdSec):'<span class="mut">—</span>')+'</td><td>'+plan+'</td><td>'+tags+'</td>'+
+    '<td class="n '+cls+'">'+(c.closed?sMoney(c.net):'—')+'</td><td class="n '+cls+'">'+(c.closed&&c.pct!=null?(c.pct>0?'+':'')+c.pct.toFixed(2)+'%':'—')+'</td>'+
+    '<td style="text-align:right;white-space:nowrap"><button class="icon" data-act="view" data-id="'+t.id+'" aria-label="View trade" title="View">'+ICON.view+'</button><button class="icon" data-act="edit" data-id="'+t.id+'" aria-label="Edit trade" title="Edit">'+ICON.edit+'</button><button class="icon" data-act="del" data-id="'+t.id+'" aria-label="Delete trade" title="Delete">'+ICON.trash+'</button></td></tr>';
+}
+function tradeTable(rows){
+  var filtered=!!(tf.q||tf.result||tf.setup||tf.tag),cutoff=addDays(nyNow().date,-30),all=!!(showOlder||filtered);
+  var sorted=rows.slice().sort(function(a,b){return rowDate(b.c).localeCompare(rowDate(a.c))||rowKey(b.c).localeCompare(rowKey(a.c))});
+  var vis=all?sorted:sorted.filter(function(x){return rowDate(x.c)>=cutoff}),older=sorted.length-vis.length,h='',day=null;
+  h+='<div class="panel tablewrap"><table class="tbl"><thead><tr><th>Symbol</th><th>Result</th><th>Position</th><th>Hold</th><th>Plan</th><th>Mistakes</th><th class="n">P/L</th><th class="n">Return %</th><th></th></tr></thead><tbody>';
+  vis.forEach(function(x){
+    var d=rowDate(x.c);
+    if(d!==day){
+      day=d;var dl=vis.filter(function(y){return rowDate(y.c)===d}),dc=dl.filter(function(y){return y.c.closed}),net=sum(dc,function(y){return y.c.net});
+      h+='<tr class="dgh"><td colspan="9"><div><span>'+esc(longDate(d))+'</span><span>'+plural(dl.length,'trade')+(dc.length?' · <b class="'+plCls(net)+'">'+sMoney(net)+'</b>':'')+'</span></div></td></tr>';
+    }
+    h+=tradeRow(x);
+  });
+  if(!vis.length)h+='<tr><td colspan="9" class="mut" style="text-align:center;padding:24px">'+(filtered?'No trades match these filters.':'No trades in the last 30 days.')+'</td></tr>';
+  h+='</tbody></table></div>';
+  if(older)h+='<div style="text-align:center;margin-top:10px"><button class="btn sm" data-act="showolder">Show older trades ('+older+')</button></div>';
+  else if(showOlder&&!filtered)h+='<div style="text-align:center;margin-top:10px"><button class="btn sm" data-act="showolder">Show the last 30 days only</button></div>';
+  return h;
+}
 VIEWS.dashboard=function(){
   var all=sortedTrades(),shown=all.filter(function(x){return inPeriod(x.c)}),closed=shown.filter(function(x){return x.c.closed}),open=all.filter(function(x){return!x.c.closed});
   var S=tstats(closed),decided=closed.filter(function(x){return x.t.followed!=null}),fol=decided.filter(function(x){return x.t.followed===true}).length;
@@ -453,21 +516,18 @@ VIEWS.dashboard=function(){
   var h='<div class="top"><div><h1>Dashboard</h1><p class="sub">'+open.length+' open '+(open.length===1?'trade':'trades')+(review.length?' · <button class="btn link" data-act="review">'+review.length+(review.length===1?' trade needs':' trades need')+' a review</button>':'')+'</p></div><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">'+periodBar()+'<button class="btn primary" data-go="form">New trade</button></div></div>';
   if(stale&&!closedNotices.backup)h+='<div class="callout"><span>Your journal lives in this browser only. Back it up so a cleared browser can\'t erase it.</span><span style="display:flex;gap:6px;align-items:center"><button class="btn sm" data-go="account">Back up now</button>'+dismissBtn('backup')+'</span></div>';
   if(!state.cash.length&&!closedNotices.deposit)h+='<div class="callout"><span>Add your starting deposit so balance and returns are tracked from day one.</span><span style="display:flex;gap:6px;align-items:center"><button class="btn sm" data-go="account">Add deposit</button>'+dismissBtn('deposit')+'</span></div>';
+  h+=sessionStrip(all);
   h+=openTradesHtml(open,bal);
   var riskCell=open.length?openRiskCell(open,bal):'';
   h+='<p class="grp">Account</p><div class="panel acct'+(open.length?' risk':'')+'"><div><p class="k">Balance</p><p class="big2">'+money(bal)+'</p></div><div><p class="k">Net deposited</p><p class="big2">'+money(dep)+'</p></div><div><p class="k">Return on deposits</p><p class="big2 '+(ret==null?'mut':ret>=0?'win':'loss')+'">'+(ret==null?'—':(ret>0?'+':'')+ret.toFixed(2)+'%')+'</p></div>'+riskCell+'<p class="formula">'+money(dep)+' deposited '+(allPnl<0?'−':'+')+' '+money(Math.abs(allPnl))+' trading − '+money(Math.abs(allFees))+' fees</p></div>';
   h+='<p class="grp">Trading results · closed trades only, before fees'+(state.period==='all'?'':' · '+state.period)+'</p><div class="panel strip5"><div><p class="k">Trading P/L</p><p class="big '+(!S.n?'mut':S.net>0?'win':S.net<0?'loss':'')+'">'+(S.n?sMoney(S.net):'—')+'</p></div><div><p class="k">Win rate</p><p class="big '+(S.n?(S.winRate>=.5?'win':'loss'):'mut')+'">'+(S.n?pctFmt(S.winRate*100):'—')+'</p></div><div><p class="k">Profit factor</p><p class="big">'+(S.pf==null?'—':S.pf.toFixed(2))+'</p></div><div><p class="k">Avg win / avg loss</p><p class="big2" style="margin-top:2px;white-space:nowrap">'+(S.avgWin==null?'—':money(S.avgWin))+' / '+(S.avgLoss==null?'—':money(S.avgLoss))+'</p></div><div><p class="k">Followed plan</p><p class="big">'+(decided.length?pctFmt(fol/decided.length*100):'—')+'</p></div></div>';
+  h+=costliestMistake(all);
   h+='<div class="panel" style="padding:16px 18px;margin-bottom:16px"><div class="curvehead"><div class="seg" role="group" aria-label="Curve"><button class="chip'+(mode==='pnl'?' on':'')+'" data-act="curve" data-v="pnl">Trading PnL</button><button class="chip'+(mode==='balance'?' on':'')+'" data-act="curve" data-v="balance">Balance</button></div><span class="k">'+(mode==='pnl'?'Before fees. Deposits and withdrawals never move this line.':'Includes deposits, withdrawals, trades and fees.')+'</span></div><div class="svgbox chartbox">'+chartSvg(mode==='pnl'?pnlRows(closed):led,mode==='pnl'?'Close a trade to start your trading curve.':'Your balance curve shows up after your first deposit and trade.',mode==='pnl'?sMoney:money,mode==='pnl')+'</div></div>';
   var tableRows=applyFilters(shown);
   if(!shown.length){h+='<div class="panel empty"><h2>Log your first trade</h2><p>Save the entry when you get in with your stop and a one-line plan. Add the exit later.</p><button class="btn primary" data-go="form">New trade</button></div>'}
   else{
     h+=filterBar(shown.length,tableRows.length);
-    h+='<div class="panel tablewrap"><table class="tbl"><thead><tr><th>Date</th><th>Symbol</th><th>Result</th><th>Type</th><th class="n">Strike</th><th class="n">Stock in</th><th class="n">Stop</th><th>Plan</th><th>Tags</th><th class="n">P/L</th><th class="n">Return %</th><th></th></tr></thead><tbody>';
-    tableRows.forEach(function(x){var t=x.t,c=x.c,pl=!c.closed?'<span class="mut">—</span>':t.followed===true?'<span class="win">Yes</span>':t.followed===false?'<span class="loss">No</span>':'<span class="mut">Not set</span>';
-      var tags=(t.tags||[]).slice(0,2).map(function(g){return'<span class="chip static">'+esc(g)+'</span>'}).join(' ')+((t.tags||[]).length>2?' <span class="mut">+'+(t.tags.length-2)+'</span>':'');
-      h+='<tr data-open="'+t.id+'" tabindex="0"><td>'+fmtDate(c.closed?c.closeDate:c.openDate)+'</td><td class="sym">'+esc(t.symbol)+'</td><td><span class="pill '+c.result+'">'+({win:'Win',loss:'Loss',even:'Even',open:'Open'})[c.result]+'</span></td><td>'+esc(cap(t.dir))+'</td><td class="n">'+(t.market==='option'?num(t.strike):'—')+'</td><td class="n">'+num(t.stockIn)+'</td><td class="n">'+num(t.stop)+'</td><td>'+pl+'</td><td>'+tags+'</td><td class="n '+(c.result==='win'?'win':c.result==='loss'?'loss':'mut')+'">'+(c.closed?sMoney(c.net):'—')+'</td><td class="n '+(c.result==='win'?'win':c.result==='loss'?'loss':'mut')+'">'+(c.closed&&c.pct!=null?(c.pct>0?'+':'')+c.pct.toFixed(2)+'%':'—')+'</td><td style="text-align:right"><button class="icon" data-act="view" data-id="'+t.id+'" aria-label="View trade" title="View">'+ICON.view+'</button><button class="icon" data-act="edit" data-id="'+t.id+'" aria-label="Edit trade">'+ICON.edit+'</button><button class="icon" data-act="del" data-id="'+t.id+'" aria-label="Delete trade">'+ICON.trash+'</button></td></tr>'});
-    if(!tableRows.length)h+='<tr><td colspan="12" class="mut" style="text-align:center;padding:24px">No trades match these filters.</td></tr>';
-    h+='</tbody></table></div>';
+    h+=tradeTable(tableRows);
   }
   var del=state.trades.filter(function(t){return t.deletedAt}).length;
   h+='<p class="hint" style="margin-top:14px"><button class="btn link" data-act="deleted">Recently deleted ('+del+')</button> · <button class="btn link" data-go="account">Export and backup</button></p>';
@@ -715,6 +775,7 @@ var ACT={
   period:function(b){state.period=b.dataset.v;save();render()},
   expiredworthless:function(b){expireWorthless(b.dataset.id)},
   clearfilters:function(){tf={q:'',result:'',setup:'',tag:''};render()},
+  showolder:function(){showOlder=!showOlder;render()},
   signout:function(){if(window.handleLogout)window.handleLogout()},
   review:function(){var r=needsReview();if(r.length)go('detail',{id:r[0].t.id})},
   view:function(b){go('detail',{id:b.dataset.id,from:view.name})},
@@ -882,7 +943,7 @@ document.head.insertAdjacentHTML('beforeend','<style>'+
 '.wlt .wlep{border:0;cursor:pointer;font-family:inherit;white-space:nowrap}.wlt .wlep:hover{filter:brightness(.95)}'+
 '.wlt input:disabled,.wlt select:disabled{opacity:.45}'+
 '.wlt .btn.sm{padding:4px 10px}'+
-'.wlhelp{margin-top:18px;font-size:13px;color:var(--ink2)}.wlhelp summary{cursor:pointer;font-weight:600;color:var(--ink)}.wlhelp dl{display:grid;grid-template-columns:130px 1fr;gap:6px 14px;margin:10px 0 0}.wlhelp dt{font-weight:600;color:var(--ink)}.wlhelp dd{margin:0}@media (max-width:820px){.wlhelp dl{grid-template-columns:1fr}}'+                                
+'.wlhelp{margin-top:18px;font-size:13px;color:var(--ink2)}.wlhelp summary{cursor:pointer;font-weight:600;color:var(--ink)}.wlhelp dl{display:grid;grid-template-columns:130px 1fr;gap:6px 14px;margin:10px 0 0}.wlhelp dt{font-weight:600;color:var(--ink)}.wlhelp dd{margin:0}@media (max-width:820px){.wlhelp dl{grid-template-columns:1fr}}'+
 '.wlt .wled{width:132px}.wlt .wleh{min-width:46px}'+
 '.wlt .wspk{min-width:76px}.wlt tr.wlA td:first-child{box-shadow:inset 3px 0 0 var(--win)}.wlt tr.wlA.wlon td:first-child{box-shadow:inset 3px 0 0 var(--accent)}'+
 '.wlt .wllast{font-size:11.5px;color:var(--muted);margin-left:4px}'+
@@ -1108,8 +1169,7 @@ function wlDayRow(label,k,d){
   var v=d[k];
   return'<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:5px 0"><span style="min-width:150px;font-weight:500">'+label+'</span><div class="seg">'+['Yes','No'].map(function(o){return'<button class="chip'+(v===o?' on':'')+'" data-act="wldayset" data-k="'+k+'" data-v="'+o+'" aria-pressed="'+(v===o)+'">'+o+'</button>'}).join('')+'</div>'+(v===''?'<span class="pill warn">Not checked yet</span>':'')+(v==='Yes'?'<input data-wlday="'+k+'Note" value="'+esc(d[k+'Note'])+'" placeholder="What is it? e.g. FOMC 2pm" aria-label="'+label+' note" style="flex:1 1 220px;max-width:420px" autocomplete="off">':'')+'</div>';
 }
-
-  function wlHelp(){
+function wlHelp(){
   var rows=[
     ['Daily routine','Set each ticker to Add or Pass in the Today column. Setups carry over from day to day; Add and Pass reset each morning.'],
     ['Keyboard','↑ ↓ select a row · 1–4 direction · D DBL break · L level · 5–8 at level · W waiting for · A add · P pass · Enter or Esc leaves a field.'],

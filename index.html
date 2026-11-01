@@ -222,7 +222,6 @@ main{padding:18px 14px 80px}
 .tsbox{position:relative;border:1px dashed var(--line2);border-radius:8px;min-height:150px;display:flex;flex-direction:column;cursor:pointer;background:var(--field);overflow:hidden}.tsbox.has{border-style:solid}.tsbox.on{border:2px solid var(--accent)}.tsbox img{width:100%;max-height:300px;object-fit:contain;display:block;cursor:zoom-in;background:var(--hover)}.tsbox:hover .wcx{opacity:1}
 .drop{cursor:pointer}
 .dt-gallery img{width:100%;height:190px;object-fit:cover;border-radius:8px;border:1px solid var(--line);cursor:zoom-in;background:var(--hover);display:block}
-.tswarn{background:var(--warnbg);color:var(--warn);border-radius:8px;padding:10px 12px;font-size:13px;margin-bottom:10px}.tswarn .btn{display:block;margin-top:8px}
 @media (max-width:820px){.dt-two{grid-template-columns:1fr}}
 .fbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 0 10px}
 .fbar input,.fbar select{width:auto;min-width:0;padding:6px 10px;font-size:13px}
@@ -739,21 +738,16 @@ function tradeShots(t){
   var before=has?ids.find(function(id){return roles[id]==='before'})||'':ids[0]||'',after=has?ids.find(function(id){return roles[id]==='after'})||'':ids[1]||'';
   return{before:before,after:after,more:ids.filter(function(id){return id!==before&&id!==after})};
 }
-/* direction check: the first fill shows whether the position was opened long (buy) or short (sell) */
-var FLIP_DIR={'short put':'long put','long put':'short put','short call':'long call','long call':'short call','long':'short','short':'long'};
-function dirMismatch(dir,firstSide){var want=/^short/.test(dir)?'sell':'buy';return firstSide&&firstSide!==want?FLIP_DIR[dir]:null}
-function dirMismatchText(dir,firstSide,fix){return'You '+(firstSide==='buy'?'bought':'sold')+' first, so this looks like a '+cap(fix)+', not a '+cap(dir)+'.'}
 function tradeNeighbours(id){var l=sortedTrades(),i=l.findIndex(function(x){return x.t.id===id});return{older:i>-1&&l[i+1]?l[i+1].t.id:null,newer:i>0?l[i-1].t.id:null}}
 function kv(k,v){return'<div class="kvrow"><span class="k">'+k+'</span><span>'+v+'</span></div>'}
 VIEWS.detail=function(){
   var t=state.trades.find(function(x){return x.id===view.id});if(!t)return'<p>That trade no longer exists.</p>';
   var c=calc(t),r=risk(t,c),rr=chartRR(t),nb=tradeNeighbours(t.id),back=view.from||'dashboard',isOpt=t.market==='option';
-  var resL={win:'Win',loss:'Loss',even:'Even',open:'Open'}[c.result],fix=c.ex[0]&&dirMismatch(t.dir,c.ex[0].side);
+  var resL={win:'Win',loss:'Loss',even:'Even',open:'Open'}[c.result];
   var h='<div class="top"><div><button class="btn link" data-go="'+back+'" style="padding-left:0">← '+cap(back)+'</button><h1 style="margin-top:4px">'+esc(t.symbol)+' <span class="pill '+c.result+'" style="vertical-align:middle">'+resL+'</span></h1><p class="sub">'+esc(typeLabel(t))+(isOpt&&t.expiry?' · expires '+fmtDate(t.expiry):'')+(c.closed?' · closed '+fmtDate(c.closeDate):' · opened '+fmtDate(c.openDate))+'</p></div>'+
     '<div class="dt-act"><button class="btn sm" data-act="tradenav" data-id="'+(nb.older||'')+'"'+(nb.older?'':' disabled')+' aria-label="Previous trade">‹ Previous</button><button class="btn sm" data-act="tradenav" data-id="'+(nb.newer||'')+'"'+(nb.newer?'':' disabled')+' aria-label="Next trade">Next ›</button>'+
     (canExpire(t)?'<button class="btn" data-act="expiredworthless" data-id="'+t.id+'">Expired worthless</button>':'')+(!c.closed?'<button class="btn primary" data-act="addexit" data-id="'+t.id+'">Add exit</button>':'')+
     '<button class="btn" data-act="copycard" data-id="'+t.id+'">Copy image</button><button class="btn" data-act="copyrecord" data-id="'+t.id+'">Private record</button><button class="btn" data-act="edit" data-id="'+t.id+'">Edit</button><button class="btn danger" data-act="del" data-id="'+t.id+'">Delete</button></div></div>';
-  if(fix)h+='<div class="callout"><span>'+dirMismatchText(t.dir,c.ex[0].side,fix)+'</span><button class="btn sm" data-act="fixdir" data-id="'+t.id+'" data-dir="'+fix+'">Switch to '+cap(fix)+'</button></div>';
   var plCell=c.closed?'<p class="big2 '+plCls(c.net)+'">'+sMoney(c.net)+'</p><p class="k">before fees</p>':'<p class="big2 mut">Open</p>';
   h+='<div class="panel strip">'+
     '<div><p class="k">P/L</p>'+plCell+'</div>'+
@@ -777,8 +771,16 @@ VIEWS.detail=function(){
   return h;
 };
 /* form */
-function blankDraft(){var n=nyNow(),mk=state.settings.lastMarket||'option',dr=DIRS[mk].some(function(o){return o[0]===state.settings.lastDir})?state.settings.lastDir:DIRS[mk][0][0];return{id:null,symbol:'',market:mk,dir:dr,strike:'',expiry:'',stockIn:'',stop:'',target:'',stockOut:'',execs:[{id:uid(),side:/^short/.test(dr)?'sell':'buy',date:n.date,time:n.time,qty:'1',price:'',fee:String(mk==='option'?state.settings.fee:0)}],plan:'',planAt:'',planEditedAfterExit:false,followed:null,hindsight:'',setup:state.settings.lastSetup||'',emotion:'',tags:[],shots:[],shotRoles:{},_orig:[]}}
-function draftFrom(t){var d=JSON.parse(JSON.stringify(t));['strike','stockIn','stop','target','stockOut'].forEach(function(k){d[k]=t[k]===''||t[k]==null?'':String(t[k])});d.execs=d.execs.map(function(x){return Object.assign({},x,{qty:String(x.qty),price:String(x.price),fee:String(x.fee)})});d._orig=t.shots.slice();d._plan0=t.plan;return d}
+function blankDraft(){var n=nyNow(),mk=state.settings.lastMarket||'option',dr=DIRS[mk].some(function(o){return o[0]===state.settings.lastDir})?state.settings.lastDir:DIRS[mk][0][0];return{id:null,symbol:'',market:mk,dir:dr,strike:'',expiry:'',stockIn:'',stop:'',target:'',stockOut:'',execs:[{id:uid(),side:/^short/.test(dr)?'sell':'buy',date:n.date,time:n.time,qty:'1',price:'',fee:String(mk==='option'?state.settings.fee:0)}],plan:'',planAt:'',planEditedAfterExit:false,followed:null,hindsight:'',setup:state.settings.lastSetup||'',emotion:'',tags:[],shots:[],shotRoles:{},_orig:[],kind:/call/.test(dr)?'call':'put'}}
+/* Long or short is read from the first fill: buy first = long, sell first = short. */
+function firstFill(execs){return execs.slice().sort(function(a,b){return(a.date+a.time).localeCompare(b.date+b.time)})[0]}
+function syncDir(d){
+  var f=firstFill(d.execs),side=f?f.side:'buy';
+  if(d.market==='option'){d.kind=d.kind||(/call/.test(d.dir)?'call':'put');d.dir=(side==='sell'?'short ':'long ')+d.kind}
+  else d.dir=side==='sell'?'short':'long';
+  return d;
+}
+function draftFrom(t){var d=JSON.parse(JSON.stringify(t));['strike','stockIn','stop','target','stockOut'].forEach(function(k){d[k]=t[k]===''||t[k]==null?'':String(t[k])});d.execs=d.execs.map(function(x){return Object.assign({},x,{qty:String(x.qty),price:String(x.price),fee:String(x.fee)})});d._orig=t.shots.slice();d._plan0=t.plan;d.kind=/call/.test(t.dir)?'call':'put';return syncDir(d)}
 function entrySide(d){return/^short/.test(d.dir)?'sell':'buy'}
 function chipRow(kind,list,cur,bad){return list.map(function(v){var on=Array.isArray(cur)?cur.indexOf(v)>-1:cur===v;return'<button type="button" class="chip'+(bad?' bad':'')+(on?' on':'')+'" data-act="chip" data-kind="'+kind+'" data-v="'+esc(v)+'" aria-pressed="'+on+'">'+esc(v)+'</button>'}).join('')}
 /* ---------- new trade: expirations, risk preview, drafts ---------- */
@@ -844,8 +846,6 @@ function tradeSummary(){
   var plan=window.wlPlanFor?window.wlPlanFor(d.symbol,updSummary):null;
   function row(k,v){return'<div class="tsrow"><span class="k">'+k+'</span><span>'+v+'</span></div>'}
   var h='<div class="panel tsum"><h2>Trade summary</h2>';
-  var first=d.execs.slice().sort(function(a,b){return(a.date+a.time).localeCompare(b.date+b.time)})[0],fix=first&&dirMismatch(d.dir,first.side);
-  if(fix)h+='<div class="tswarn">'+dirMismatchText(d.dir,first.side,fix)+'<button type="button" class="btn sm" data-act="fixdraftdir" data-dir="'+fix+'">Switch to '+cap(fix)+'</button></div>';
   h+=row('Symbol','<b>'+(sym?esc(sym):'—')+'</b>')+row('Position',esc(pos));
   if(isOpt)h+=row('Expiration',d.expiry?md(d.expiry)+' · '+daysBetween(nyNow().date,d.expiry)+' DTE':'—');
   h+='<div class="tsdiv"></div>'+(rd&&rd.rows.length?rd.rows.map(function(x){return row(x[0],x[1])}).join(''):'<p class="k">Risk appears once the strike, price and quantity are filled in.</p>');
@@ -874,7 +874,7 @@ VIEWS.form=function(){
   var head=h;h='';
   if(d._resumed){h+='<div class="callout"><span>Continuing your unsaved '+(editing?'changes to '+esc(d.symbol):'trade'+(d.symbol?' ('+esc(d.symbol.toUpperCase())+')':''))+'.</span><button class="btn sm" data-act="discarddraft">Discard</button></div>';d._resumed=false}
   h+='<div id="errs"></div><datalist id="syms">'+syms.map(function(s){return'<option value="'+esc(s)+'">'}).join('')+'</datalist>';
-  h+='<div class="sec"><div class="grid"><label class="f"><span>Symbol</span><input data-f="symbol" list="syms" value="'+esc(d.symbol)+'" autocomplete="off" placeholder="SPY" style="text-transform:uppercase"></label><label class="f"><span>Market</span><select data-f="market" data-rerender="1"><option value="option"'+(isOpt?' selected':'')+'>Option</option><option value="stock"'+(!isOpt?' selected':'')+'>Stock</option></select></label><label class="f"><span>Direction</span><select data-f="dir" data-rerender="1">'+DIRS[d.market].map(function(o){return'<option value="'+o[0]+'"'+(d.dir===o[0]?' selected':'')+'>'+o[1]+'</option>'}).join('')+'</select></label>'+(isOpt?'<label class="f"><span>Strike</span><input data-f="strike" type="number" step="any" inputmode="decimal" value="'+esc(d.strike)+'"></label><div class="f expf"><span>Expiration</span><div class="expwrap"><input data-f="expiry" type="date" value="'+esc(d.expiry)+'" aria-label="Expiration"><select id="qp" data-qp="1" aria-label="Quick pick expiration">'+quickPickOptions()+'</select></div></div>':'')+'</div><div class="grid" style="margin-top:12px"><label class="f"><span>Stock price at entry (optional)</span><input data-f="stockIn" type="number" step="any" inputmode="decimal" value="'+esc(d.stockIn)+'"></label><label class="f"><span>Stop (optional)</span><input data-f="stop" type="number" step="any" inputmode="decimal" value="'+esc(d.stop)+'"></label><label class="f"><span>Target (optional)</span><input data-f="target" type="number" step="any" inputmode="decimal" value="'+esc(d.target)+'"></label></div></div>';
+  h+='<div class="sec"><div class="grid"><label class="f"><span>Symbol</span><input data-f="symbol" list="syms" value="'+esc(d.symbol)+'" autocomplete="off" placeholder="SPY" style="text-transform:uppercase"></label><label class="f"><span>Market</span><select data-f="market" data-rerender="1"><option value="option"'+(isOpt?' selected':'')+'>Option</option><option value="stock"'+(!isOpt?' selected':'')+'>Stock</option></select></label>'+(isOpt?'<label class="f"><span>Put / Call</span><select data-f="kind" data-rerender="1"><option value="put"'+(d.kind!=='call'?' selected':'')+'>Put</option><option value="call"'+(d.kind==='call'?' selected':'')+'>Call</option></select></label>':'')+(isOpt?'<label class="f"><span>Strike</span><input data-f="strike" type="number" step="any" inputmode="decimal" value="'+esc(d.strike)+'"></label><div class="f expf"><span>Expiration</span><div class="expwrap"><input data-f="expiry" type="date" value="'+esc(d.expiry)+'" aria-label="Expiration"><select id="qp" data-qp="1" aria-label="Quick pick expiration">'+quickPickOptions()+'</select></div></div>':'')+'</div><div class="grid" style="margin-top:12px"><label class="f"><span>Stock price at entry (optional)</span><input data-f="stockIn" type="number" step="any" inputmode="decimal" value="'+esc(d.stockIn)+'"></label><label class="f"><span>Stop (optional)</span><input data-f="stop" type="number" step="any" inputmode="decimal" value="'+esc(d.stop)+'"></label><label class="f"><span>Target (optional)</span><input data-f="target" type="number" step="any" inputmode="decimal" value="'+esc(d.target)+'"></label></div></div>';
   h+='<div class="sec"><h2>Executions <span class="mut" style="font-weight:400">· New York time · fee is per '+(isOpt?'contract':'share')+'</span></h2><div id="execs"></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn sm" data-act="addex">Add execution</button></div></div>';
   h+='<div class="sec"><label class="f"><span>Plan · why you\'re taking this trade</span><textarea data-f="plan" rows="2" placeholder="Needs a retest of demand before I buy the call">'+esc(d.plan)+'</textarea></label></div>';
   h+='<details class="sec"'+(hasExit||editing?' open':'')+'><summary style="cursor:pointer;font-weight:600;font-size:15px;margin-bottom:12px">After the trade</summary><div class="grid" style="max-width:340px;margin-bottom:16px"><label class="f"><span>Stock price at exit</span><input data-f="stockOut" type="number" step="any" inputmode="decimal" value="'+esc(d.stockOut)+'"></label></div>'+
@@ -927,7 +927,7 @@ function validate(d){
   return e;
 }
 function saveTrade(){
-  var d=draft,errs=validate(d),box=$('#errs');
+  var d=syncDir(draft),errs=validate(d),box=$('#errs');
   if(errs.length){box.innerHTML='<div class="callout bad" role="alert"><div>Fix this to save:<ul>'+errs.map(function(m){return'<li>'+esc(m)+'</li>'}).join('')+'</ul></div></div>';window.scrollTo(0,0);return}
   var prev=d.id?state.trades.find(function(t){return t.id===d.id}):null,now=nyNow();
   var t={id:d.id||uid(),symbol:d.symbol.trim().toUpperCase(),market:d.market,dir:d.dir,strike:d.market==='option'?+d.strike:'',expiry:d.market==='option'?d.expiry:'',stockIn:+d.stockIn,stop:+d.stop,target:+d.target>0?+d.target:'',stockOut:+d.stockOut>0?+d.stockOut:'',
@@ -1062,8 +1062,6 @@ var ACT={
   discarddraft:function(){dropDraftImages();draft=freshDraft(blankDraft());render();toast('Draft discarded')},
   usewlplan:function(){var p=window.wlPlanFor&&window.wlPlanFor(draft.symbol);if(!p)return;draft.plan=p;var ta=$('[data-f=plan]');if(ta)ta.value=p;updSummary()},
   tradenav:function(b){if(b.dataset.id)go('detail',{id:b.dataset.id,from:view.from})},
-  fixdir:function(b){var t=state.trades.find(function(x){return x.id===b.dataset.id});if(!t)return;var old=t.dir;t.dir=b.dataset.dir;t.updatedAt=Date.now();save();render();toast('Switched to '+cap(t.dir),function(){t.dir=old;t.updatedAt=Date.now();save();render()})},
-  fixdraftdir:function(b){draft.dir=b.dataset.dir;render()},
   copylast:function(){var l=sortedTrades()[0];if(!l)return;var t=l.t,d=blankDraft();d.symbol=t.symbol;d.market=t.market;d.dir=t.dir;d.strike=t.strike===''?'':String(t.strike);d.execs[0].side=entrySide(d);d.execs[0].qty=String(l.c.eq||1);d.setup=t.setup||d.setup;draft=d;render()},
   chip:function(b){
     var k=b.dataset.kind,v=b.dataset.v;
@@ -1272,8 +1270,8 @@ function handle(e){
   if(t.dataset.calm){if(e.type==='change'){cal.month=t.value;cal.sel=null;render()}return}
   if(t.dataset.period){if(e.type==='change'){state.period=t.value;save();render()}return}
   if(t.dataset.qp&&draft){if(e.type==='change'&&t.value){draft.expiry=t.value;var ei=$('[data-f=expiry]');if(ei)ei.value=t.value;t.value='';updSummary()}return}
-  if(t.dataset.f&&draft){draft[t.dataset.f]=t.value;if(t.dataset.f==='symbol'){var qp=$('#qp');if(qp)qp.innerHTML=quickPickOptions()}updSummary();if(t.dataset.rerender){if(t.dataset.f==='market'){draft.dir=DIRS[draft.market][0][0];draft.execs[0].side=entrySide(draft);draft.execs.forEach(function(x){x.fee=String(draft.market==='option'?state.settings.fee:0)})}else{draft.execs.forEach(function(x,i){if(i===0)x.side=entrySide(draft)})}if(e.type==='change')render()}else if(t.dataset.f==='dir'&&e.type==='change')render()}
-  else if(t.dataset.ex&&draft){var i=+t.closest('.ex').dataset.i;draft.execs[i][t.dataset.ex]=t.value;updSummary()}
+  if(t.dataset.f&&draft){draft[t.dataset.f]=t.value;if(t.dataset.f==='symbol'){var qp=$('#qp');if(qp)qp.innerHTML=quickPickOptions()}updSummary();if(t.dataset.rerender){if(t.dataset.f==='market')draft.execs.forEach(function(x){x.fee=String(draft.market==='option'?state.settings.fee:0)});syncDir(draft);if(e.type==='change')render()}}
+  else if(t.dataset.ex&&draft){var i=+t.closest('.ex').dataset.i;draft.execs[i][t.dataset.ex]=t.value;if(t.dataset.ex==='side'||t.dataset.ex==='date'||t.dataset.ex==='time')syncDir(draft);updSummary()}
   else if(t.dataset.cash&&cashDraft){cashDraft[t.dataset.cash]=t.value;var pv=$('#cprev');if(pv)pv.innerHTML=cashPreview()}
   else if(t.dataset.set==='shotDays'){state.settings.shotDays=+t.value;state.settings.shotClean='';settingsChanged();save();cleanShots()}
   else if(t.dataset.set==='fhKey'){state.settings.fhKey=t.value.trim();state.settings.earnFetched='';state.settings.holFetched='';settingsChanged();save();syncHolidays()}

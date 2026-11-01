@@ -21,11 +21,15 @@ p{margin:0}
 .app{display:grid;grid-template-columns:208px minmax(0,1fr);min-height:100vh}
 .side{padding:22px 14px;border-right:1px solid var(--line);display:flex;flex-direction:column;gap:4px;position:sticky;top:0;height:100vh}
 .brand{font-weight:600;font-size:17px;margin:0 10px 18px;letter-spacing:-.01em}
+.brandlogo{display:block;max-width:100%;max-height:72px;object-fit:contain;margin-bottom:8px}
+.brand.haslogo .brandname{font-size:13px;color:var(--ink2)}
+.logoprev{max-width:180px;max-height:72px;object-fit:contain;display:block;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--field)}
 .navb{display:block;padding:8px 10px;border-radius:8px;border:0;background:none;color:var(--ink2);font:inherit;font-weight:500;cursor:pointer;text-align:left;width:100%}
 .navb:hover{background:var(--hover)}
 .navb.on{background:var(--hover);color:var(--ink)}
 .side .note{margin:auto 10px 0;font-size:12.5px;color:var(--muted)}
-main{padding:28px 32px 90px;max-width:1140px;width:100%}
+main{padding:28px 32px 90px;width:100%}
+main[data-view="form"]{max-width:1000px}
 .btn{font:inherit;font-weight:500;font-size:14px;padding:8px 14px;border-radius:8px;border:1px solid var(--line2);background:var(--panel);color:var(--ink);cursor:pointer}
 .btn:hover{background:var(--hover)}
 .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--onaccent)}
@@ -93,7 +97,6 @@ input.bad,select.bad{border-color:var(--loss)}
 .mini{width:150px;padding:4px 10px;font-size:13px;border-radius:99px}
 .svgbox svg{width:100%;height:auto;display:block}
 .svgbox.narrow svg{max-width:440px}
-.svgbox.chartbox svg{max-width:680px}
 .svgbox text{font:12px "Schibsted Grotesk",system-ui,sans-serif;fill:var(--ink2)}
 #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:8px;display:flex;gap:14px;align-items:center;font-size:14px;z-index:50}
 #toast button{background:none;border:0;color:inherit;font:inherit;font-weight:600;text-decoration:underline;cursor:pointer;padding:0}
@@ -128,7 +131,10 @@ main{padding:18px 14px 80px}
 .trk{position:relative;height:10px}
 .trk:before{content:"";position:absolute;left:50%;top:-3px;bottom:-3px;width:1px;background:var(--line2)}
 .bar{position:absolute;top:0;height:10px;border-radius:3px}
-.cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr)) 96px;gap:6px}
+.cal{display:grid;grid-template-columns:repeat(5,minmax(0,1fr)) 110px;gap:6px}
+.calhead{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.day .damt{font-weight:600;color:var(--ink)}
+.day.hol{background:transparent;border-style:dashed;color:var(--muted);cursor:default}.day.hol b{color:var(--muted)}
 .dh{font-size:12px;color:var(--ink2);text-align:center;font-weight:500}
 .day{min-height:74px;padding:6px 8px;border-radius:8px;border:1px solid var(--line);background:var(--panel);text-align:left;font:inherit;font-size:12.5px;color:var(--ink2);cursor:pointer;display:block;width:100%}
 .day b{display:block;font-size:13px;font-weight:600;color:var(--ink);margin-bottom:2px}
@@ -141,7 +147,7 @@ main{padding:18px 14px 80px}
 @media (max-width:820px){
 .acct{grid-template-columns:repeat(3,minmax(0,1fr))}.acct .formula{grid-column:1/-1;text-align:left}
 .strip5{grid-template-columns:repeat(2,minmax(0,1fr))}.strip5>div:nth-child(odd){border-left:0}.strip5>div:nth-child(n+3){border-top:1px solid var(--line)}
-.cal{grid-template-columns:repeat(7,minmax(0,1fr)) 58px;gap:3px}.day{min-height:58px;padding:3px;font-size:10.5px;overflow:hidden}.day b{font-size:12px}.wk{padding:4px;font-size:10.5px;overflow:hidden}.day small{display:none}.brow{grid-template-columns:84px minmax(0,1fr) 70px 58px}
+.cal{grid-template-columns:repeat(5,minmax(0,1fr)) 62px;gap:3px}.day{min-height:58px;padding:3px;font-size:10.5px;overflow:hidden}.day b{font-size:12px}.wk{padding:4px;font-size:10.5px;overflow:hidden}.day small{display:none}.brow{grid-template-columns:84px minmax(0,1fr) 70px 58px}
 }
 
 /* Login overlay */
@@ -209,7 +215,7 @@ main{padding:18px 14px 80px}
   </div>
 <div class="app" id="root">
   <nav class="side" aria-label="Main">
-    <div class="brand"> No Face<br>Trade Journal</div>
+    <div class="brand" id="brand"><span class="brandname">No Face<br>Trade Journal</span></div>
     <button class="navb" data-go="dashboard">Dashboard</button>
     <button class="navb" data-go="stats">Stats</button>
     <button class="navb" data-go="calendar">Calendar</button>
@@ -350,8 +356,14 @@ var view={name:'dashboard'},draft=null,toastT=null,pendingRestore=null,downloads
 function $(s){return document.querySelector(s)}
 function toast(msg,undo){var el=$('#toast');el.hidden=false;el.innerHTML='<span>'+esc(msg)+'</span>'+(undo?'<button data-act="undo">Undo</button>':'');el._undo=undo||null;clearTimeout(toastT);toastT=setTimeout(function(){el.hidden=true},undo?7000:3500)}
 function go(name,params){view=Object.assign({name:name},params||{});render();window.scrollTo(0,0)}
+function renderBrand(){
+  var el=$('#brand'),logo=state&&state.brand&&state.brand.logo;if(!el||el.dataset.logo===(logo||''))return;
+  el.dataset.logo=logo||'';el.classList.toggle('haslogo',!!logo);
+  el.innerHTML=(logo?'<img class="brandlogo" src="'+logo+'" alt="Logo">':'')+'<span class="brandname">No Face<br>Trade Journal</span>';
+}
 function render(){
   var cur=(view.name==='detail'||view.name==='deleted')?(view.from||'dashboard'):view.name;document.querySelectorAll('.navb').forEach(function(b){b.classList.toggle('on',b.dataset.go===cur)});
+  renderBrand();$('#main').dataset.view=view.name;
   $('#main').innerHTML=VIEWS[view.name]();hydrate();
   if(view.name==='form'){renderExecs();renderShots()}
 }
@@ -360,11 +372,23 @@ function render(){
 function chartSvg(rows,msg,fmt,base0){fmt=fmt||money;
   if(rows.length<2)return'<p class="mut" style="padding:24px 0">'+msg+'</p>';
   var pts=rows.map(function(r){return r.balance}),lo=Math.min.apply(null,base0?pts.concat([0]):pts),hi=Math.max.apply(null,base0?pts.concat([0]):pts),span=(hi-lo)||1;
-  var n=pts.length,X=function(i){return 40+i/(n-1)*540},Y=function(v){return 96-(v-lo)/span*74};
+  var W=1200,R=W-40,n=pts.length,X=function(i){return 40+i/(n-1)*(R-40)},Y=function(v){return 96-(v-lo)/span*74};
   var line=pts.map(function(v,i){return X(i).toFixed(1)+','+Y(v).toFixed(1)}).join(' ');
-  return'<svg viewBox="0 0 620 144" role="img" aria-label="Curve over time">'+(base0?'<line x1="40" y1="'+Y(0).toFixed(1)+'" x2="580" y2="'+Y(0).toFixed(1)+'" stroke="var(--line2)" stroke-dasharray="3 3"/>':'')+'<polyline points="'+line+'" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round"/>'+(n<=30?pts.map(function(v,i){return'<circle cx="'+X(i).toFixed(1)+'" cy="'+Y(v).toFixed(1)+'" r="3" fill="var(--accent)"/>'}).join(''):'')+''+(base0?'<text x="36" y="'+(Y(0)+4).toFixed(1)+'" text-anchor="end">$0</text>':'')+'<text x="40" y="12">High '+money(hi,2)+'</text>'+((base0?lo<0:hi>lo)?'<text x="40" y="'+Math.min(Y(lo)+16,121).toFixed(1)+'">Low '+money(lo,2)+'</text>':'')+'<text x="'+X(n-1).toFixed(1)+'" y="'+Math.max(Y(pts[n-1])-9,26).toFixed(1)+'" text-anchor="end" style="fill:var(--ink);font-weight:600">'+fmt(pts[n-1])+'</text><text x="40" y="140">'+fmtDate(rows[0].date)+'</text><text x="580" y="140" text-anchor="end">'+fmtDate(rows[n-1].date)+'</text></svg>';
+  return'<svg viewBox="0 0 '+W+' 144" role="img" aria-label="Curve over time">'+(base0?'<line x1="40" y1="'+Y(0).toFixed(1)+'" x2="'+R+'" y2="'+Y(0).toFixed(1)+'" stroke="var(--line2)" stroke-dasharray="3 3"/>':'')+'<polyline points="'+line+'" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round"/>'+(n<=30?pts.map(function(v,i){return'<circle cx="'+X(i).toFixed(1)+'" cy="'+Y(v).toFixed(1)+'" r="3" fill="var(--accent)"/>'}).join(''):'')+''+(base0?'<text x="36" y="'+(Y(0)+4).toFixed(1)+'" text-anchor="end">$0</text>':'')+'<text x="40" y="12">High '+money(hi,2)+'</text>'+((base0?lo<0:hi>lo)?'<text x="40" y="'+Math.min(Y(lo)+16,121).toFixed(1)+'">Low '+money(lo,2)+'</text>':'')+'<text x="'+X(n-1).toFixed(1)+'" y="'+Math.max(Y(pts[n-1])-9,26).toFixed(1)+'" text-anchor="end" style="fill:var(--ink);font-weight:600">'+fmt(pts[n-1])+'</text><text x="40" y="140">'+fmtDate(rows[0].date)+'</text><text x="'+R+'" y="140" text-anchor="end">'+fmtDate(rows[n-1].date)+'</text></svg>';
 }
-function inPeriod(c){if(state.period==='all'||!c.closed)return true;var d={'30D':30,'90D':90,'180D':180}[state.period];return c.closeDate>=addDays(nyNow().date,-d)}
+var PERIOD_DAYS={'30D':30,'90D':90,'180D':180};
+function inPeriod(c){
+  var p=state.period;if(p==='all'||!c.closed)return true;
+  if(PERIOD_DAYS[p])return c.closeDate>=addDays(nyNow().date,-PERIOD_DAYS[p]);
+  var y=p==='ytd'?nyNow().date.slice(0,4):p.slice(1);
+  return c.closeDate.slice(0,4)===y;
+}
+function pastYears(){
+  var cy=nyNow().date.slice(0,4),ys={};
+  state.trades.forEach(function(t){if(t.deletedAt)return;var c=calc(t);if(c.closed&&c.closeDate.slice(0,4)<cy)ys[c.closeDate.slice(0,4)]=1});
+  return Object.keys(ys).sort().reverse();
+}
+function periodLabel(){var p=state.period;return PERIOD_DAYS[p]?'Last '+PERIOD_DAYS[p]+' days':p==='ytd'?'This year':p==='all'?'All time':p.slice(1)}
 function closeKey(c){var x=c.ex[c.ex.length-1];return x.date+x.time}
 function ascClosed(list){return list.filter(function(x){return x.c.closed}).sort(function(a,b){return closeKey(a.c).localeCompare(closeKey(b.c))})}
 function sum(a,f){return a.reduce(function(t,x){return t+f(x)},0)}
@@ -377,7 +401,11 @@ function pnlRows(list){var asc=ascClosed(list),rows=[],cum=0;if(!asc.length)retu
 var closedNotices={};
 var tf={q:'',result:'',setup:'',tag:''};
 function dismissBtn(k){return'<button class="icon" data-act="dismiss" data-k="'+k+'" aria-label="Dismiss this notice" title="Dismiss" style="color:inherit;font-size:20px;line-height:1;padding:0 8px">×</button>'}
-function periodBar(){return'<div class="seg" role="group" aria-label="Period">'+['30D','90D','180D','all'].map(function(p){return'<button class="chip'+(state.period===p?' on':'')+'" data-act="period" data-v="'+p+'">'+(p==='all'?'All':p)+'</button>'}).join('')+'</div>'}
+function periodBar(){
+  var opts=[['30D','Last 30 days'],['90D','Last 90 days'],['180D','Last 180 days'],['ytd','This year']].concat(pastYears().map(function(y){return['Y'+y,y]})).concat([['all','All time']]);
+  if(!opts.some(function(o){return o[0]===state.period}))state.period='all';
+  return'<select data-period="1" aria-label="Period" style="width:auto">'+opts.map(function(o){return'<option value="'+o[0]+'"'+(state.period===o[0]?' selected':'')+'>'+o[1]+'</option>'}).join('')+'</select>';
+}
 VIEWS={};
 function md(d){return fmtDate(d).replace(/\/\d{4}$/,'')}
 function plural(n,w){return n+' '+w+(n===1?'':'s')}
@@ -522,7 +550,7 @@ VIEWS.dashboard=function(){
   h+=openTradesHtml(open,bal);
   var riskCell=open.length?openRiskCell(open,bal):'';
   h+='<p class="grp">Account</p><div class="panel acct'+(open.length?' risk':'')+'"><div><p class="k">Balance</p><p class="big2">'+money(bal)+'</p></div><div><p class="k">Net deposited</p><p class="big2">'+money(dep)+'</p></div><div><p class="k">Return on deposits</p><p class="big2 '+(ret==null?'mut':ret>=0?'win':'loss')+'">'+(ret==null?'—':(ret>0?'+':'')+ret.toFixed(2)+'%')+'</p></div>'+riskCell+'<p class="formula">'+money(dep)+' deposited '+(allPnl<0?'−':'+')+' '+money(Math.abs(allPnl))+' trading − '+money(Math.abs(allFees))+' fees</p></div>';
-  h+='<p class="grp">Trading results · closed trades only, before fees'+(state.period==='all'?'':' · '+state.period)+'</p><div class="panel strip5"><div><p class="k">Trading P/L</p><p class="big '+(!S.n?'mut':S.net>0?'win':S.net<0?'loss':'')+'">'+(S.n?sMoney(S.net):'—')+'</p></div><div><p class="k">Win rate</p><p class="big '+(S.n?(S.winRate>=.5?'win':'loss'):'mut')+'">'+(S.n?pctFmt(S.winRate*100):'—')+'</p></div><div><p class="k">Profit factor</p><p class="big">'+(S.pf==null?'—':S.pf.toFixed(2))+'</p></div><div><p class="k">Avg win / avg loss</p><p class="big2" style="margin-top:2px;white-space:nowrap">'+(S.avgWin==null?'—':money(S.avgWin))+' / '+(S.avgLoss==null?'—':money(S.avgLoss))+'</p></div><div><p class="k">Followed plan</p><p class="big">'+(decided.length?pctFmt(fol/decided.length*100):'—')+'</p></div></div>';
+  h+='<p class="grp">Trading results · closed trades only, before fees · '+periodLabel()+'</p><div class="panel strip5"><div><p class="k">Trading P/L</p><p class="big '+(!S.n?'mut':S.net>0?'win':S.net<0?'loss':'')+'">'+(S.n?sMoney(S.net):'—')+'</p></div><div><p class="k">Win rate</p><p class="big '+(S.n?(S.winRate>=.5?'win':'loss'):'mut')+'">'+(S.n?pctFmt(S.winRate*100):'—')+'</p></div><div><p class="k">Profit factor</p><p class="big">'+(S.pf==null?'—':S.pf.toFixed(2))+'</p></div><div><p class="k">Avg win / avg loss</p><p class="big2" style="margin-top:2px;white-space:nowrap">'+(S.avgWin==null?'—':money(S.avgWin))+' / '+(S.avgLoss==null?'—':money(S.avgLoss))+'</p></div><div><p class="k">Followed plan</p><p class="big">'+(decided.length?pctFmt(fol/decided.length*100):'—')+'</p></div></div>';
   h+=costliestMistake(all);
   h+='<div class="panel" style="padding:16px 18px;margin-bottom:16px"><div class="curvehead"><div class="seg" role="group" aria-label="Curve"><button class="chip'+(mode==='pnl'?' on':'')+'" data-act="curve" data-v="pnl">Trading PnL</button><button class="chip'+(mode==='balance'?' on':'')+'" data-act="curve" data-v="balance">Balance</button></div><span class="k">'+(mode==='pnl'?'Before fees. Deposits and withdrawals never move this line.':'Includes deposits, withdrawals, trades and fees.')+'</span></div><div class="svgbox chartbox">'+chartSvg(mode==='pnl'?pnlRows(closed):led,mode==='pnl'?'Close a trade to start your trading curve.':'Your balance curve shows up after your first deposit and trade.',mode==='pnl'?sMoney:money,mode==='pnl')+'</div></div>';
   var tableRows=applyFilters(shown);
@@ -538,6 +566,10 @@ VIEWS.dashboard=function(){
 
 /* stats */
 var DAYN=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+/* NYSE market holidays and early closes. UPDATE EACH YEAR from nyse.com/markets/hours-calendars */
+var WL_HOL={'2026-01-01':"New Year's Day",'2026-01-19':'MLK Day','2026-02-16':"Presidents' Day",'2026-04-03':'Good Friday','2026-05-25':'Memorial Day','2026-06-19':'Juneteenth','2026-07-03':'Independence Day','2026-09-07':'Labor Day','2026-11-26':'Thanksgiving','2026-12-25':'Christmas',
+'2027-01-01':"New Year's Day",'2027-01-18':'MLK Day','2027-02-15':"Presidents' Day",'2027-03-26':'Good Friday','2027-05-31':'Memorial Day','2027-06-18':'Juneteenth','2027-07-05':'Independence Day','2027-09-06':'Labor Day','2027-11-25':'Thanksgiving','2027-12-24':'Christmas'};
+var WL_EARLY={'2026-11-27':'Day after Thanksgiving','2026-12-24':'Christmas Eve','2027-11-26':'Day after Thanksgiving'};
 function closedIn(){return sortedTrades().filter(function(x){return x.c.closed&&inPeriod(x.c)})}
 function groupBy(list,fn){var m={};list.forEach(function(x){var ks=fn(x);if(!Array.isArray(ks))ks=[ks];ks.forEach(function(k){if(k==null||k==='')return;var g=m[k]||(m[k]={k:k,n:0,w:0,net:0});g.n++;g.net+=x.c.net;if(x.c.net>0)g.w++})});return Object.keys(m).map(function(k){return m[k]})}
 function groupRows(groups,avg){return groups.map(function(g){return{label:g.k,val:avg?g.net/g.n:g.net,n:g.n,wr:g.w/g.n}})}
@@ -557,7 +589,7 @@ function colChart(items){
 function timeBucket(t){return t<'09:30:00'?'Pre':t<'10:00:00'?'9:30':t<'11:00:00'?'10':t<'12:00:00'?'11':t<'14:00:00'?'12–2':t<'16:00:00'?'2–4':'After'}
 VIEWS.stats=function(){
   var list=closedIn(),S=tstats(list);
-  var h='<div class="top"><div><h1>Stats</h1><p class="sub">'+S.n+' closed '+(S.n===1?'trade':'trades')+(state.period==='all'?'':' in the last '+state.period)+' · P/L is before fees</p></div>'+periodBar()+'</div>';
+  var h='<div class="top"><div><h1>Stats</h1><p class="sub">'+S.n+' closed '+(S.n===1?'trade':'trades')+' · '+periodLabel()+' · P/L is before fees</p></div>'+periodBar()+'</div>';
   if(!S.n)return h+'<div class="panel empty"><h2>No closed trades yet</h2><p>Stats appear once you have closed trades. Setup, emotion, tags and the plan check are what make them useful.</p><button class="btn primary" data-go="form">New trade</button></div>';
   if(S.n<20&&!closedNotices.small)h+='<div class="callout"><span>Only '+S.n+' closed '+(S.n===1?'trade':'trades')+' so far. Treat these patterns as hints until you have about 20. Groups under 5 trades are dimmed.</span>'+dismissBtn('small')+'</div>';
   h+='<div class="panel strip"><div><p class="k">Profit factor</p><p class="big">'+(S.pf==null?'—':S.pf.toFixed(2))+'</p></div><div><p class="k">Expectancy per trade</p><p class="big '+(S.exp>=0?'win':'loss')+'">'+sMoney(S.exp)+'</p></div><div><p class="k">Avg win / avg loss</p><p class="big2" style="margin-top:2px;white-space:nowrap">'+(S.avgWin==null?'—':money(S.avgWin))+' / '+(S.avgLoss==null?'—':money(S.avgLoss))+'</p></div><div><p class="k">Max drawdown</p><p class="big '+(S.dd>0?'loss':'')+'">'+(S.dd>0?'-':'')+money(S.dd)+'</p></div><div title="Total commissions and fees on the closed trades in this period"><p class="k">Fees paid</p><p class="big '+(S.fees>0?'loss':'')+'">'+(S.fees>0?'-':'')+money(S.fees)+'</p><p class="k">P/L after fees '+sMoney(S.net-S.fees)+'</p></div></div>';
@@ -583,34 +615,72 @@ VIEWS.stats=function(){
 
 /* calendar */
 var cal={month:null,sel:null};
+function calTint(v,scale){
+  if(!v)return'';
+  var pct=Math.round(14+Math.min(1,Math.abs(v)/scale)*36);
+  return' style="background:color-mix(in srgb,var(--'+(v>0?'win':'loss')+') '+pct+'%,var(--panel));border-color:transparent"';
+}
+function calScale(vals){
+  var a=vals.map(Math.abs).filter(Boolean).sort(function(x,y){return x-y});
+  return a.length?a[Math.min(a.length-1,Math.floor(a.length*.9))]:1;
+}
+function monthPicker(mo){
+  var tot={},now=nyNow().date.slice(0,7),first=now;
+  sortedTrades().forEach(function(x){if(x.c.closed){var m=x.c.closeDate.slice(0,7);tot[m]=(tot[m]||0)+x.c.net;if(m<first)first=m}});
+  var last=mo>now?mo:now,months=[];
+  for(var m=last;m>=first&&m>=(mo<first?mo:first);m=addDays(m+'-01',-1).slice(0,7))months.push(m);
+  if(months.indexOf(mo)<0)months.push(mo);
+  var h='<select data-calm="1" aria-label="Month" style="width:auto;font-weight:600">',yr=null;
+  months.forEach(function(m){
+    if(m.slice(0,4)!==yr){if(yr)h+='</optgroup>';yr=m.slice(0,4);h+='<optgroup label="'+yr+'">'}
+    h+='<option value="'+m+'"'+(m===mo?' selected':'')+'>'+monthName(m)+(tot[m]!=null?' · '+sMoney(tot[m]):'')+'</option>';
+  });
+  return h+'</optgroup></select>';
+}
+function yearTotal(y){var l=sortedTrades().filter(function(x){return x.c.closed&&x.c.closeDate.slice(0,4)===String(y)});return l.length?sum(l,function(x){return x.c.net}):null}
 VIEWS.calendar=function(){
-  var now=nyNow().date,mo=cal.month||now.slice(0,7),y=+mo.slice(0,4),m=+mo.slice(5),days=new Date(y,m,0).getDate(),first=new Date(y,m-1,1).getDay(),map={};
+  var now=nyNow().date,mo=cal.month||now.slice(0,7),y=+mo.slice(0,4),m=+mo.slice(5),last=mo+'-'+String(new Date(y,m,0).getDate()).padStart(2,'0'),map={};
   sortedTrades().forEach(function(x){if(x.c.closed){var d=x.c.closeDate,e=map[d]||(map[d]={net:0,n:0,list:[]});e.net+=x.c.net;e.n++;e.list.push(x)}});
-  function ds(dn){return mo+'-'+String(dn).padStart(2,'0')}
-  var mNet=0,mN=0,gd=0,rd=0,lastDay=null;
-  for(var d=1;d<=days;d++){var e=map[ds(d)];if(e){mNet+=e.net;mN+=e.n;if(e.net>0)gd++;else if(e.net<0)rd++;lastDay=ds(d)}}
+  /* a weekend close is shown on that week's Friday, or on the next Monday when Friday is in the previous month */
+  function cellOf(d){
+    var w=new Date(d+'T12:00:00').getDay();if(w>0&&w<6)return d;
+    var f=addDays(d,w===6?-1:-2);return f.slice(0,7)===d.slice(0,7)?f:addDays(d,w===6?2:1);
+  }
+  var cells={},mNet=0,mN=0,gd=0,rd=0,lastDay=null;
+  Object.keys(map).forEach(function(d){
+    if(d.slice(0,7)!==mo)return;
+    var x=map[d],k=cellOf(d),e=cells[k]||(cells[k]={net:0,n:0,list:[],wkend:false});
+    e.net+=x.net;e.n+=x.n;e.list=e.list.concat(x.list);if(k!==d)e.wkend=true;
+    mNet+=x.net;mN+=x.n;if(x.net>0)gd++;else if(x.net<0)rd++;
+    if(!lastDay||k>lastDay)lastDay=k;
+  });
+  function cellData(d){return cells[d]||{net:0,n:0,list:[],wkend:false}}
+  var sc=calScale(Object.keys(map).map(function(d){return map[d].net})),first=mo+'-01',wk=addDays(first,-((new Date(first+'T12:00:00').getDay()+6)%7));
   var sel=cal.sel&&cal.sel.slice(0,7)===mo?cal.sel:lastDay;
-  var title=new Date(y,m-1,1).toLocaleString('en-US',{month:'long',year:'numeric'});
-  var h='<div class="top"><div><h1>Calendar</h1><p class="sub">Each trade counts on the day it closed, New York time. P/L is before fees.</p></div></div>';
-  h+='<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px"><div style="display:flex;align-items:center;gap:8px"><button class="btn sm" data-act="calnav" data-d="-1" aria-label="Previous month">‹</button><h2 style="margin:0;min-width:150px;text-align:center">'+title+'</h2><button class="btn sm" data-act="calnav" data-d="1" aria-label="Next month">›</button><button class="btn sm" data-act="caltoday">Today</button></div><p style="font-size:14px">'+(mN?'<span class="'+(mNet>=0?'win':'loss')+'" style="font-weight:600">'+sMoney(mNet)+'</span> · '+mN+(mN===1?' trade':' trades')+' · '+gd+' green, '+rd+' red days':'<span class="mut">No closed trades this month</span>')+'</p></div>';
-  h+='<div class="cal">'+DAYN.map(function(n){return'<div class="dh">'+n+'</div>'}).join('')+'<div class="dh">Week</div>';
-  var cells=Math.ceil((first+days)/7)*7;
-  for(var i=0;i<cells;i++){
-    if(i%7===0){var wt=0,wn=0}
-    var dn=i-first+1;
-    if(dn<1||dn>days){h+='<div class="day mu"></div>'}
-    else{var k=ds(dn),e=map[k];if(e){wt+=e.net;wn+=e.n}
-      h+='<button class="day'+(e?(e.net>0?' w':e.net<0?' l':''):'')+(k===sel?' sel':'')+(k===now?' today':'')+'" data-act="calday" data-d="'+k+'" aria-label="'+fmtDate(k)+(e?', '+sMoney(e.net)+', '+e.n+' trades':', no trades')+'"><b>'+dn+'</b>'+(e?sMoney(e.net)+'<small><br>'+e.n+(e.n===1?' trade':' trades')+'</small>':'')+'</button>'}
-    if(i%7===6){var wk=Math.floor(i/7)+1;h+='<div class="wk"><span class="k">Week '+wk+'</span>'+(wn?'<br><span class="'+(wt>=0?'win':'loss')+'" style="font-weight:600">'+sMoney(wt)+'</span><br><span class="k">'+wn+(wn===1?' trade':' trades')+'</span>':'')+'</div>'}
+  var yt=yearTotal(y);
+  var h='<div class="top"><div><h1>Calendar</h1><p class="sub">Each trade counts on the day it closed, New York time. P/L is before fees. Darker shades mean bigger days.</p></div></div>';
+  h+='<div class="calhead"><div style="display:flex;align-items:center;gap:8px"><button class="btn sm" data-act="calnav" data-d="-1" aria-label="Previous month">‹</button>'+monthPicker(mo)+'<button class="btn sm" data-act="calnav" data-d="1" aria-label="Next month">›</button><button class="btn sm" data-act="caltoday">Today</button><span class="k" style="margin-left:6px">'+y+' total: '+(yt==null?'—':'<b class="'+plCls(yt)+'">'+sMoney(yt)+'</b>')+'</span></div><p style="font-size:14px">'+(mN?'<span class="'+plCls(mNet)+'" style="font-weight:600">'+sMoney(mNet)+'</span> · '+plural(mN,'trade')+' · '+gd+' green, '+rd+' red days':'<span class="mut">No closed trades this month</span>')+'</p></div>';
+  h+='<div class="cal">'+['Mon','Tue','Wed','Thu','Fri'].map(function(n){return'<div class="dh">'+n+'</div>'}).join('')+'<div class="dh">Week</div>';
+  for(var w=1;wk<=last;wk=addDays(wk,7)){
+    if(addDays(wk,4)<first)continue;
+    var wt=0,wn=0;
+    for(var i=0;i<5;i++){
+      var d=addDays(wk,i),dn=+d.slice(8);
+      if(d.slice(0,7)!==mo){h+='<div class="day mu"></div>';continue}
+      var e=cellData(d);wt+=e.net;wn+=e.n;
+      if(WL_HOL[d]){h+='<div class="day hol" title="Market closed"><b>'+dn+'</b>Closed<small><br>'+esc(WL_HOL[d])+'</small></div>';continue}
+      var early=WL_EARLY[d]?' <span title="Early close 1pm · '+esc(WL_EARLY[d])+'">⏰</span>':'';
+      h+='<button class="day'+(e.n?(e.net>0?' w':e.net<0?' l':''):'')+(d===sel?' sel':'')+(d===now?' today':'')+'" data-act="calday" data-d="'+d+'"'+(e.n?calTint(e.net,sc):'')+' aria-label="'+fmtDate(d)+(e.n?', '+sMoney(e.net)+', '+plural(e.n,'trade'):', no trades')+'"><b>'+dn+early+'</b>'+(e.n?'<span class="damt">'+sMoney(e.net)+'</span><small><br>'+plural(e.n,'trade')+(e.wkend?' · incl. weekend':'')+'</small>':'')+'</button>';
+    }
+    h+='<div class="wk"><span class="k">Week '+(w++)+'</span>'+(wn?'<br><span class="'+plCls(wt)+'" style="font-weight:600">'+sMoney(wt)+'</span><br><span class="k">'+plural(wn,'trade')+'</span>':'')+'</div>';
   }
   h+='</div>';
-  var se=sel&&map[sel];
-  h+='<div class="sec" style="margin-top:18px"><h2>'+(sel?fmtDate(sel)+(se?' · '+se.n+(se.n===1?' trade':' trades')+' · net '+sMoney(se.net):' · no closed trades'):'Pick a day')+'</h2>';
-  if(se){h+='<div class="panel tablewrap"><table class="tbl"><tbody>'+se.list.map(function(x){var t=x.t,c=x.c;return'<tr data-open="'+t.id+'" tabindex="0"><td class="sym">'+esc(t.symbol)+'</td><td>'+esc(typeLabel(t))+'</td><td><span class="pill '+c.result+'">'+({win:'Win',loss:'Loss',even:'Even'})[c.result]+'</span></td><td>'+(t.followed===true?'<span class="win">Followed plan</span>':t.followed===false?'<span class="loss">Off plan</span>':'<span class="mut">Plan not set</span>')+'</td><td class="n '+(c.result==='win'?'win':c.result==='loss'?'loss':'mut')+'">'+sMoney(c.net)+' <span class="mut">'+(c.pct!=null?(c.pct>0?'+':'')+c.pct.toFixed(2)+'%':'')+'</span></td></tr>'}).join('')+'</tbody></table></div>'}
-  else h+='<p class="mut">Click a day with a colored tint to see its trades.</p>';
+  var se=sel&&cellData(sel);
+  h+='<div class="sec" style="margin-top:18px"><h2>'+(sel?longDate(sel)+(se&&se.n?' · '+plural(se.n,'trade')+' · net '+sMoney(se.net):' · no closed trades'):'Pick a day')+'</h2>';
+  if(se&&se.n){h+='<div class="panel tablewrap"><table class="tbl"><tbody>'+se.list.map(function(x){var t=x.t,c=x.c;return'<tr data-open="'+t.id+'" tabindex="0"><td class="sym">'+esc(t.symbol)+'</td><td>'+esc(positionLabel(t))+'</td><td><span class="pill '+c.result+'">'+({win:'Win',loss:'Loss',even:'Even'})[c.result]+'</span></td><td>'+(t.followed===true?'<span class="win">Followed plan</span>':t.followed===false?'<span class="loss">Off plan</span>':'<span class="mut">Plan not set</span>')+'</td><td class="n '+plCls(c.net)+'">'+sMoney(c.net)+' <span class="mut">'+(c.pct!=null?(c.pct>0?'+':'')+c.pct.toFixed(2)+'%':'')+'</span></td></tr>'}).join('')+'</tbody></table></div>'}
+  else h+='<p class="mut">Click a shaded day to see its trades.</p>';
   return h+'</div>';
 };
-
 /* trade detail */
 function ladder(t){
   var pts=[{k:'Entry',v:+t.stockIn,s:'ring',side:1},{k:'Stop',v:+t.stop,s:'tick',side:0}];
@@ -790,7 +860,8 @@ VIEWS.account=function(){
   var h='<div class="top"><div><h1>Account</h1><p class="sub">Your balance is deposits and withdrawals plus closed trades, minus fees.</p></div></div>';
   h+='<div class="sec"><h2>'+(c.id?'Edit entry':'Deposit or withdraw')+'</h2><p class="k">Current balance</p><p class="big2" style="margin-bottom:12px">'+money(currentBalance())+'</p><div class="grid" style="align-items:end;max-width:760px"><div><p class="k" style="margin-bottom:4px">Type</p><div class="seg"><button class="chip'+(c.type==='deposit'?' on':'')+'" data-act="cashtype" data-v="deposit">Deposit</button><button class="chip'+(c.type==='withdraw'?' on':'')+'" data-act="cashtype" data-v="withdraw">Withdraw</button></div></div><label class="f"><span>Date</span><input data-cash="date" type="date" value="'+esc(c.date)+'"></label><label class="f"><span>Amount</span><input data-cash="amount" type="number" min="0" step="any" inputmode="decimal" value="'+esc(c.amount)+'"></label><label class="f"><span>Note (optional)</span><input data-cash="note" value="'+esc(c.note)+'"></label></div><p id="cprev" class="hint">'+cashPreview()+'</p><div id="cerr" class="loss hint"></div><div style="display:flex;gap:8px;margin-top:8px"><button class="btn primary" data-act="cashsave">'+(c.id?'Save changes':'Add entry')+'</button>'+(c.id?'<button class="btn" data-act="cashcancel">Cancel</button>':'')+'</div></div>';
   h+=ledgerSection();
-  h+='<div class="sec"><h2>Settings</h2><label class="f" style="max-width:220px"><span>Default fee per contract</span><input data-set="fee" type="number" min="0" step="any" value="'+esc(state.settings.fee)+'"></label><p class="hint">Applies to new executions. You can change it on any trade.</p><label class="f" style="max-width:420px;margin-top:14px"><span>Finnhub API key (earnings dates)</span><input data-set="fhKey" type="password" autocomplete="off" value="'+esc(state.settings.fhKey||'')+'"></label><p class="hint">Saved on this device. Earnings refresh once a day when the journal opens.</p></div>';
+  h+='<div class="sec"><h2>Settings</h2><label class="f" style="max-width:220px"><span>Default fee per contract</span><input data-set="fee" type="number" min="0" step="any" value="'+esc(state.settings.fee)+'"></label><p class="hint">Applies to new executions. You can change it on any trade.</p><label class="f" style="max-width:420px;margin-top:14px"><span>Finnhub API key (earnings dates)</span><input data-set="fhKey" type="password" autocomplete="off" value="'+esc(state.settings.fhKey||'')+'"></label><p class="hint">Saved on this device. Earnings refresh once a day when the journal opens.</p>'+
+    '<div class="f" style="margin-top:14px"><span style="display:block;font-size:12.5px;color:var(--ink2);font-weight:500;margin-bottom:6px">Logo</span>'+(state.brand&&state.brand.logo?'<img class="logoprev" src="'+state.brand.logo+'" alt="Current logo">':'')+'<div style="display:flex;gap:8px;margin-top:8px"><label class="btn" style="cursor:pointer">'+(state.brand&&state.brand.logo?'Replace logo':'Upload logo')+'<input type="file" accept="image/*" data-act="logoup" style="display:none"></label>'+(state.brand&&state.brand.logo?'<button class="btn" data-act="logorm">Remove</button>':'')+'</div><p class="hint">Shown at the top of the sidebar. A PNG with a transparent background works best. Synced to your other devices.</p></div></div>';
   h+='<div class="sec"><h2>Export and backup</h2>'+(downloads?'':'<p class="hint" style="margin:0 0 10px">Downloads aren\'t available in this view.</p>')+'<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end"><label class="f" style="width:110px"><span>Year</span><select id="csvyear">'+years.map(function(y){return'<option>'+y+'</option>'}).join('')+'</select></label><button class="btn" data-act="csv"'+(downloads?'':' disabled')+'>Export yearly CSV</button><button class="btn" data-act="backup"'+(downloads?'':' disabled')+'>Back up everything</button><label class="btn" style="cursor:pointer">Restore from backup<input type="file" accept=".json,application/json" data-act="restorefile" style="display:none"></label><button class="btn" data-act="shrinkimgs">Shrink saved screenshots</button></div><p class="hint">The CSV lists closed trades for the year. The backup includes trades, deposits, screenshots and the watchlist.'+(state.settings.lastBackup?' Last backup: '+fmtDate(state.settings.lastBackup)+'.':' You haven\'t backed up yet.')+'</p>'+
     (pendingRestore?'<div class="callout" style="margin-top:12px"><span>Replace your current journal with this backup ('+pendingRestore.state.trades.length+' trades, '+pendingRestore.state.cash.length+' cash entries)?</span><span><button class="btn sm danger" data-act="restoreyes">Replace</button> <button class="btn sm" data-act="restoreno">Cancel</button></span></div>':'')+'</div>';
   h+=profileSection();
@@ -821,7 +892,6 @@ var ACT={
   calnav:function(b){var mo=cal.month||nyNow().date.slice(0,7),y=+mo.slice(0,4),m=+mo.slice(5)+(+b.dataset.d);if(m<1){m=12;y--}if(m>12){m=1;y++}cal.month=y+'-'+String(m).padStart(2,'0');cal.sel=null;render()},
   caltoday:function(){cal.month=null;cal.sel=nyNow().date;render()},
   calday:function(b){cal.sel=b.dataset.d;render()},
-  period:function(b){state.period=b.dataset.v;save();render()},
   expiredworthless:function(b){expireWorthless(b.dataset.id)},
   clearfilters:function(){tf={q:'',result:'',setup:'',tag:''};render()},
   showolder:function(){showOlder=!showOlder;render()},
@@ -869,6 +939,16 @@ var ACT={
   restoreyes:doRestore,restoreno:function(){pendingRestore=null;render()}
 };
 /* account actions */
+ACT.logoup=function(b){
+  var f=b.files&&b.files[0];b.value='';if(!f)return;
+  createImageBitmap(f).then(function(bmp){
+    var sc=Math.min(1,360/bmp.width,160/bmp.height),c=document.createElement('canvas');
+    c.width=Math.round(bmp.width*sc);c.height=Math.round(bmp.height*sc);c.getContext('2d').drawImage(bmp,0,0,c.width,c.height);
+    var url=c.toDataURL('image/png');if(url.length>200000)url=c.toDataURL('image/webp',.9);
+    state.brand={logo:url,at:Date.now()};save();render();toast('Logo updated');
+  }).catch(function(){toast("Couldn't read that image")});
+};
+ACT.logorm=function(){var old=state.brand;state.brand={logo:'',at:Date.now()};save();render();toast('Logo removed',function(){state.brand={logo:old.logo,at:Date.now()};save();render()})};
 ACT.syncnow=function(){if(window.syncNow){window.syncNow();toast('Syncing…')}};
 ACT.acfilter=function(b){acct.filter=b.dataset.v;render()};
 ACT.acmonth=function(b){var m=b.dataset.m,cur=nyNow().date.slice(0,7),open=m in acct.open?acct.open[m]:m===cur;acct.open[m]=!open;render()};
@@ -884,6 +964,8 @@ document.addEventListener('change',function(e){var b=e.target;if(b.tagName==='IN
 document.addEventListener('input',handle);
 function handle(e){
   var t=e.target;
+  if(t.dataset.calm){if(e.type==='change'){cal.month=t.value;cal.sel=null;render()}return}
+  if(t.dataset.period){if(e.type==='change'){state.period=t.value;save();render()}return}
   if(t.dataset.f&&draft){draft[t.dataset.f]=t.value;if(t.dataset.rerender){if(t.dataset.f==='market'){draft.dir=DIRS[draft.market][0][0];draft.execs[0].side=entrySide(draft);draft.execs.forEach(function(x){x.fee=String(draft.market==='option'?state.settings.fee:0)})}else{draft.execs.forEach(function(x,i){if(i===0)x.side=entrySide(draft)})}if(e.type==='change')render()}else if(t.dataset.f==='dir'&&e.type==='change')render()}
   else if(t.dataset.ex&&draft){var i=+t.closest('.ex').dataset.i;draft.execs[i][t.dataset.ex]=t.value;if(t.dataset.ex==='side'||t.dataset.ex==='qty'){var c=calc({market:draft.market,dir:draft.dir,execs:draft.execs});$('#exhint').textContent=c.closed?'Exit recorded. This trade will be saved as closed.':'No exit yet. This trade will be saved as Open until you add one.'}}
   else if(t.dataset.cash&&cashDraft){cashDraft[t.dataset.cash]=t.value;var pv=$('#cprev');if(pv)pv.innerHTML=cashPreview()}
@@ -913,10 +995,11 @@ function unionList(a,b){var r=(a||[]).slice();(b||[]).forEach(function(x){if(r.i
 function mergeById(a,b,purged){var m={};[a||[],b||[]].forEach(function(list){list.forEach(function(x){if(!x||purged[x.id])return;var c=m[x.id];if(!c||(x.updatedAt||0)>(c.updatedAt||0))m[x.id]=x})});return Object.keys(m).map(function(k){return m[k]})}
 function mergeRemote(local,remote){
   var r=remote||{},rl=r.lists||{},purged=Object.assign({},r.purged||{},local.purged||{});
-  return{trades:mergeById(local.trades,r.trades,purged),cash:mergeById(local.cash,r.cash,purged),lists:{setups:unionList(local.lists.setups,rl.setups),tags:unionList(local.lists.tags,rl.tags),emotions:unionList(local.lists.emotions,rl.emotions)},purged:purged};
+  var lb=local.brand||{},rb=r.brand||{},brand=(rb.at||0)>(lb.at||0)?rb:lb;
+  return{trades:mergeById(local.trades,r.trades,purged),cash:mergeById(local.cash,r.cash,purged),lists:{setups:unionList(local.lists.setups,rl.setups),tags:unionList(local.lists.tags,rl.tags),emotions:unionList(local.lists.emotions,rl.emotions)},purged:purged,brand:{logo:brand.logo||'',at:brand.at||0}};
 }
 function canon(v){if(Array.isArray(v))return'['+v.map(canon).join(',')+']';if(v&&typeof v==='object')return'{'+Object.keys(v).sort().map(function(k){return JSON.stringify(k)+':'+canon(v[k])}).join(',')+'}';return JSON.stringify(v)}
-function normBody(b){var byId=function(x,y){return String(x.id).localeCompare(String(y.id))};return{trades:(b.trades||[]).slice().sort(byId),cash:(b.cash||[]).slice().sort(byId),lists:{setups:(b.lists&&b.lists.setups)||[],tags:(b.lists&&b.lists.tags)||[],emotions:(b.lists&&b.lists.emotions)||[]},purged:b.purged||{}}}
+function normBody(b){var byId=function(x,y){return String(x.id).localeCompare(String(y.id))};return{trades:(b.trades||[]).slice().sort(byId),cash:(b.cash||[]).slice().sort(byId),lists:{setups:(b.lists&&b.lists.setups)||[],tags:(b.lists&&b.lists.tags)||[],emotions:(b.lists&&b.lists.emotions)||[]},purged:b.purged||{},brand:{logo:(b.brand&&b.brand.logo)||'',at:(b.brand&&b.brand.at)||0}}}
 async function cloudImageData(blob){
   var url=await blobToDataURL(blob);
   if(url.length<=900000)return url;
@@ -950,10 +1033,10 @@ async function syncNow(){
       state.settings.legacyDone=!olds.failed;await dbPut('kv','state',JSON.parse(JSON.stringify(state)));if(olds.length&&view.name!=='form')render();
     }
     var remote=await window.cloudLoad(u.uid),m=mergeRemote(state,remote);
-    var mine=canon(normBody({trades:state.trades,cash:state.cash,lists:state.lists,purged:state.purged})),merged=canon(normBody(m));
-    if(mine!==merged){state.trades=m.trades;state.cash=m.cash;state.lists=m.lists;state.purged=m.purged;await dbPut('kv','state',JSON.parse(JSON.stringify(state)));if(view.name!=='form')render()}
+    var mine=canon(normBody({trades:state.trades,cash:state.cash,lists:state.lists,purged:state.purged,brand:state.brand})),merged=canon(normBody(m));
+    if(mine!==merged){state.trades=m.trades;state.cash=m.cash;state.lists=m.lists;state.purged=m.purged;state.brand=m.brand;await dbPut('kv','state',JSON.parse(JSON.stringify(state)));if(view.name!=='form')render()}
     if(!remote||canon(normBody(remote))!==merged){
-      var payload=JSON.parse(JSON.stringify({trades:m.trades,cash:m.cash,lists:m.lists,purged:m.purged,updatedAt:new Date().toISOString()}));
+      var payload=JSON.parse(JSON.stringify({trades:m.trades,cash:m.cash,lists:m.lists,purged:m.purged,brand:m.brand,updatedAt:new Date().toISOString()}));
       if(JSON.stringify(payload).length>900000){setCloud('Cloud: journal too large to sync');toast('The cloud copy is nearly full. Ask Claude to switch it to per-trade storage.')}
       else{await window.cloudPut(u.uid,payload);setCloud('Cloud: synced '+new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}))}
     }else setCloud('Cloud: synced '+new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}));
@@ -986,7 +1069,6 @@ if(typeof document!=='undefined'&&document.getElementById('root'))boot();
 /* ===== Watchlist page: daily review, multi-day setups, earnings, cloud sync ===== */
 (function(){
 document.head.insertAdjacentHTML('beforeend','<style>'+
-'main:has(.wlfull){max-width:none}'+
 '.wlt td{padding:7px 4px;vertical-align:middle}'+
 '.wlt tr[data-wlsel]{cursor:pointer}.wlt tr[data-wlsel]:hover td{background:var(--hover)}'+
 '.wlt tr.wlon td{background:var(--hover)}.wlt tr.wlon td:first-child{box-shadow:inset 3px 0 0 var(--accent)}'+
@@ -1093,10 +1175,6 @@ function wlHighlight(id){wlUI.sel=id;document.querySelectorAll('.wlt tr.wlon').f
 
 /* ---------- earnings ---------- */
 function wlWait(ms){return new Promise(function(z){setTimeout(z,ms)})}
-/* NYSE market holidays and early closes. UPDATE EACH YEAR from nyse.com/markets/hours-calendars */
-var WL_HOL={'2026-01-01':"New Year's Day",'2026-01-19':'MLK Day','2026-02-16':"Presidents' Day",'2026-04-03':'Good Friday','2026-05-25':'Memorial Day','2026-06-19':'Juneteenth','2026-07-03':'Independence Day','2026-09-07':'Labor Day','2026-11-26':'Thanksgiving','2026-12-25':'Christmas',
-'2027-01-01':"New Year's Day",'2027-01-18':'MLK Day','2027-02-15':"Presidents' Day",'2027-03-26':'Good Friday','2027-05-31':'Memorial Day','2027-06-18':'Juneteenth','2027-07-05':'Independence Day','2027-09-06':'Labor Day','2027-11-25':'Thanksgiving','2027-12-24':'Christmas'};
-var WL_EARLY={'2026-11-27':'Day after Thanksgiving','2026-12-24':'Christmas Eve','2027-11-26':'Day after Thanksgiving'};
 function wlTrading(d){var w=new Date(d+'T12:00:00').getDay();return w!==0&&w!==6&&!WL_HOL[d]}
 function wlTdays(a,b){var n=0,d=a;while(d<b){d=addDays(d,1);if(wlTrading(d))n++}return n}
 function wlWeekEnd(){var d=today(),c=wlTrading(d)?1:0;while(c<5){d=addDays(d,1);if(wlTrading(d))c++}return d}

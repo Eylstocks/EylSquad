@@ -207,7 +207,8 @@ main{padding:18px 14px 80px}
 .curveval{font-size:15px}
 .dt-act{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.dt-act .btn:disabled{opacity:.4;cursor:default}
 .pdfopt{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 16px;margin-bottom:16px;font-size:14px}.pdfopt input{width:auto;margin-right:6px}
-.dt-levels{padding:14px 18px 10px;margin-bottom:16px}.dt-levels svg{max-height:140px}
+.dt-levels{padding:14px 18px;margin-bottom:16px}.oline{font-size:15px;margin:4px 0 8px}
+.obar{height:6px;border-radius:3px;background:var(--hover);overflow:hidden;margin-bottom:8px;max-width:520px}.obar span{display:block;height:100%;border-radius:3px}
 .dt-two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;margin-bottom:16px}
 .dt-card{padding:16px 18px}.dt-card h2{margin-bottom:10px}
 .kvrow{display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-bottom:1px solid var(--line);font-size:14px}.kvrow:last-child{border-bottom:0}
@@ -710,24 +711,19 @@ VIEWS.calendar=function(){
   return h+'</div>';
 };
 /* trade detail */
-function ladder(t){
-  var W=1200,pts=[{k:'Entry',v:+t.stockIn,s:'ring',side:1},{k:'Stop',v:+t.stop,s:'tick',side:0}];
-  if(+t.target>0)pts.push({k:'Target',v:+t.target,s:'dia',side:0});
-  if(+t.stockOut>0)pts.push({k:'Exit',v:+t.stockOut,s:'dot',side:1});
-  pts=pts.filter(function(p){return p.v>0});if(pts.length<2)return'';
-  var vals=pts.map(function(p){return p.v}),lo=Math.min.apply(null,vals),hi=Math.max.apply(null,vals),pad=((hi-lo)||1)*.08;lo-=pad;hi+=pad;
-  pts.forEach(function(p){p.x=60+(p.v-lo)/(hi-lo)*(W-120)});pts.sort(function(a,b){return a.x-b.x});
-  var last=[[],[]];
-  pts.forEach(function(p){var l=0;while(last[p.side][l]!==undefined&&p.x-last[p.side][l]<130)l++;last[p.side][l]=p.x;p.l=l});
-  var col={ring:'var(--ink)',tick:'var(--loss)',dia:'var(--win)',dot:'var(--accent)'},y=50;
-  var g='<line x1="40" y1="'+y+'" x2="'+(W-40)+'" y2="'+y+'" stroke="var(--line2)" stroke-width="2"/>';
-  pts.forEach(function(p){var c=col[p.s];
-    if(p.s==='ring')g+='<circle cx="'+p.x+'" cy="'+y+'" r="7" fill="var(--panel)" stroke="'+c+'" stroke-width="2.5"/>';
-    if(p.s==='tick')g+='<line x1="'+p.x+'" y1="'+(y-11)+'" x2="'+p.x+'" y2="'+(y+11)+'" stroke="'+c+'" stroke-width="3.5"/>';
-    if(p.s==='dia')g+='<polygon points="'+p.x+','+(y-8)+' '+(p.x+8)+','+y+' '+p.x+','+(y+8)+' '+(p.x-8)+','+y+'" fill="'+c+'"/>';
-    if(p.s==='dot')g+='<circle cx="'+p.x+'" cy="'+y+'" r="7" fill="'+c+'"/>';
-    g+='<text x="'+p.x+'" y="'+(p.side?y+30+p.l*16:y-18-p.l*16)+'" text-anchor="middle" style="fill:var(--ink)">'+p.k+' '+p.v.toFixed(2)+'</text>'});
-  return'<svg viewBox="0 0 '+W+' 104" role="img" aria-label="Stock price levels: entry, stop, target and exit">'+g+'</svg>';
+/* Outcome vs plan, measured on the stock: how far the exit went toward the target, or toward the stop. */
+function outcomeHtml(t,closed){
+  var e=+t.stockIn,s=+t.stop,g=+t.target,x=+t.stockOut,bull=isBullish(t.dir);
+  if(!(e>0))return'';
+  var levels='Entry '+num(e)+(g>0?' · Target '+num(g):' · No target set')+(s>0?' · Stop '+num(s):''),line,bar='';
+  if(!(x>0))line=closed?'No exit price recorded':'Open · no exit yet';
+  else{
+    var move=bull?x-e:e-x,reward=g>0?(bull?g-e:e-g):0,risk=s>0?(bull?e-s:s-e):0,pct;
+    line='Exited at <b>'+num(x)+'</b> · '+Math.abs(move).toFixed(2)+(move>=0?' from entry':' against entry');
+    if(move>=0&&reward>0){pct=Math.round(move/reward*100);line+=' · <b class="win">'+pct+'% of the way to target'+(pct>=100?' ✓':'')+'</b>';bar='<div class="obar"><span style="width:'+Math.min(pct,100)+'%;background:var(--win)"></span></div>'}
+    else if(move<0&&risk>0){pct=Math.round(-move/risk*100);line+=' · <b class="loss">'+(pct>=100?'Stopped out ('+pct+'% of risk)':'Cut at '+pct+'% of risk')+'</b>';bar='<div class="obar"><span style="width:'+Math.min(pct,100)+'%;background:var(--loss)"></span></div>'}
+  }
+  return'<div class="panel dt-levels"><p class="k">Outcome vs plan</p><p class="oline">'+line+'</p>'+bar+'<p class="k">'+levels+'</p></div>';
 }
 /* direction check: the first fill shows whether the position was opened long (buy) or short (sell) */
 var FLIP_DIR={'short put':'long put','long put':'short put','short call':'long call','long call':'short call','long':'short','short':'long'};
@@ -752,8 +748,7 @@ VIEWS.detail=function(){
     '<div><p class="k">Hold</p><p class="big2">'+(c.closed?holdShort(c.holdSec):'—')+'</p></div>'+
     '<div><p class="k">Risk/reward (chart)</p>'+(rr&&rr.warn?'<p class="loss" style="font-size:13px;margin-top:4px">'+esc(rr.warn)+'</p>':'<p class="big2">'+(rr?rrHtml(rr):'<span class="mut">—</span>')+'</p>')+'</div>'+
     '<div><p class="k">Followed plan</p><p class="big2 '+(t.followed===true?'win':t.followed===false?'loss':'mut')+'">'+(t.followed===true?'Yes':t.followed===false?'No':'—')+'</p></div></div>';
-  var lad=ladder(t);
-  if(lad)h+='<div class="panel dt-levels"><p class="k">Stock price levels</p><div class="svgbox">'+lad+'</div>'+(rr&&rr.detail?'<p class="k" style="text-align:center">'+cap(rr.detail)+'</p>':'')+'</div>';
+  h+=outcomeHtml(t,c.closed);
   var riskRows=isOpt?kv('Max profit',typeof r.maxP==='number'?money(r.maxP):esc(r.maxP))+kv('Max loss',typeof r.maxL==='number'?money(r.maxL):esc(r.maxL))+kv('Breakeven',num(r.be))+kv('DTE at entry',r.dte==null?'—':r.dte):kv('Average entry',num(c.avgIn))+(c.avgOut!=null?kv('Average exit',num(c.avgOut)):'');
   riskRows+=kv('Fees',money(c.fees))+kv('After fees',c.closed?'<b class="'+plCls(c.afterFees)+'">'+sMoney(c.afterFees)+'</b>':'—');
   var exRows=c.ex.map(function(x){return'<tr><td><span class="'+(x.side==='sell'?'loss':'win')+'">'+cap(x.side)+'</span></td><td class="n">'+x.qty+'</td><td class="n">'+num(x.price)+'</td><td>'+fmtDate(x.date)+' '+fmtTime(x.time)+'</td><td class="n">'+money((+x.fee||0)*(+x.qty))+'</td></tr>'}).join('');

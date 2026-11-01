@@ -105,7 +105,6 @@ input.bad,select.bad{border-color:var(--loss)}
 .drop{border:1px dashed var(--line2);border-radius:8px;padding:12px;color:var(--muted);font-size:13px;margin-top:8px}
 .mini{width:150px;padding:4px 10px;font-size:13px;border-radius:99px}
 .svgbox svg{width:100%;height:auto;display:block}
-.svgbox.narrow svg{max-width:440px}
 .svgbox text{font:12px "Schibsted Grotesk",system-ui,sans-serif;fill:var(--ink2)}
 #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:8px;display:flex;gap:14px;align-items:center;font-size:14px;z-index:50}
 #toast button{background:none;border:0;color:inherit;font:inherit;font-weight:600;text-decoration:underline;cursor:pointer;padding:0}
@@ -132,9 +131,13 @@ main{padding:18px 14px 80px}
 .strip5>div{padding:14px 18px;border-left:1px solid var(--line)}
 .strip5>div:first-child{border-left:0}
 .curvehead{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px}
-.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(420px,100%),1fr));gap:14px;margin-bottom:14px}
+.cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-bottom:14px}
+@media (max-width:900px){.cards{grid-template-columns:minmax(0,1fr)}}
 .card{padding:16px 18px}
 .card h2{margin-bottom:10px}
+.scards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-bottom:14px}
+.colbox svg{width:100%;max-height:230px}
+@media (max-width:900px){.scards{grid-template-columns:minmax(0,1fr)}}
 .brow-sep{text-align:center;margin:6px 0}
 .brow{display:grid;grid-template-columns:110px minmax(0,1fr) 76px 62px;gap:8px;align-items:center;font-size:13px;margin:7px 0}
 .trk{position:relative;height:10px}
@@ -612,9 +615,10 @@ function barRows(rows){
   return rows.map(function(r){if(r.sep)return'<p class="k brow-sep">'+r.sep+'</p>';var pos=r.val>=0,w=Math.abs(r.val)/mx*48;return'<div class="brow"'+(r.n<5?' style="opacity:.55"':'')+'><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+esc(r.label)+'">'+esc(r.label)+'</span><div class="trk"><div class="bar" style="width:'+w+'%;'+(pos?'left:50%;background:var(--win)':'right:50%;background:var(--loss)')+'"></div></div><span class="'+(pos?'win':'loss')+'" style="text-align:right;font-weight:500">'+sMoney(r.val)+'</span><span class="k" title="'+plural(r.n,'trade')+', '+Math.round(r.wr*100)+'% win rate">'+r.n+' · '+Math.round(r.wr*100)+'%</span></div>'}).join('');
 }
 function colChart(items){
-  var mx=Math.max.apply(null,items.map(function(i){return Math.abs(i.val)}).concat([0.01])),W=items.length*56+8,s='<svg viewBox="0 0 '+W+' 132" style="max-width:'+Math.round(W*1.2)+'px" role="img" aria-label="PnL by group"><line x1="4" y1="50" x2="'+(W-4)+'" y2="50" stroke="var(--line2)"/>';
-  items.forEach(function(it,i){var h=Math.abs(it.val)/mx*34,x=12+i*56,pos=it.val>=0;
-    s+='<g'+(it.n<5?' opacity=".55"':'')+'>'+(it.n?'<rect x="'+x+'" y="'+(pos?50-h:50)+'" width="32" height="'+Math.max(h,1)+'" rx="3" fill="'+(pos?'var(--win)':'var(--loss)')+'"/><text x="'+(x+16)+'" y="'+(pos?50-h-5:50+h+13)+'" text-anchor="middle" style="fill:var(--ink);font-size:11px">'+(it.val>=0?'+':'-')+'$'+Math.abs(it.val).toFixed(2)+'</text>':'')+'<text x="'+(x+16)+'" y="112" text-anchor="middle">'+it.label+'</text><text x="'+(x+16)+'" y="127" text-anchor="middle" style="fill:var(--muted)">n='+it.n+'</text></g>'});
+  var mx=Math.max.apply(null,items.map(function(i){return Math.abs(i.val)}).concat([0.01])),W=640,B=78,MAXH=56,slot=(W-16)/items.length,bw=Math.min(52,slot*.5);
+  var s='<svg viewBox="0 0 '+W+' 176" role="img" aria-label="PnL by group" style="font-size:14px"><line x1="4" y1="'+B+'" x2="'+(W-4)+'" y2="'+B+'" stroke="var(--line2)"/>';
+  items.forEach(function(it,i){var h=Math.abs(it.val)/mx*MAXH,cx=8+slot*i+slot/2,pos=it.val>=0;
+    s+='<g'+(it.n<5?' opacity=".55"':'')+'>'+(it.n?'<rect x="'+(cx-bw/2)+'" y="'+(pos?B-h:B)+'" width="'+bw+'" height="'+Math.max(h,1)+'" rx="3" fill="'+(pos?'var(--win)':'var(--loss)')+'"/><text x="'+cx+'" y="'+(pos?B-h-7:B+h+17)+'" text-anchor="middle" style="fill:var(--ink);font-size:13px">'+(it.val>=0?'+':'-')+'$'+Math.abs(it.val).toFixed(2)+'</text>':'')+'<text x="'+cx+'" y="152" text-anchor="middle" style="font-size:14px">'+it.label+'</text><text x="'+cx+'" y="170" text-anchor="middle" style="fill:var(--muted);font-size:12px">n='+it.n+'</text></g>'});
   return s+'</svg>';
 }
 function timeBucket(t){return t<'09:30:00'?'Pre':t<'10:00:00'?'9:30':t<'11:00:00'?'10':t<'12:00:00'?'11':t<'14:00:00'?'12–2':t<'16:00:00'?'2–4':'After'}
@@ -633,14 +637,18 @@ VIEWS.stats=function(){
   if(tick.length>12)tick=tick.slice(0,6).concat([{sep:'Best 6 above · worst 6 below · '+(tick.length-12)+' more in between'}],tick.slice(-6));
   var pos=groupRows(groupBy(list,function(x){return posType(x.t)})).sort(byVal);
   var sub='Net PnL · trades · win rate';
-  h+='<div class="cards"><div class="panel card"><h2>Plan followed or not</h2><p class="k" style="margin:-6px 0 8px">Average PnL per trade · trades · win rate</p>'+barRows(pg)+'</div><div class="panel card"><h2>By emotion</h2><p class="k" style="margin:-6px 0 8px">'+sub+'</p>'+barRows(emo)+'</div><div class="panel card"><h2>Cost of each mistake</h2><p class="k" style="margin:-6px 0 8px">Net PnL of trades with the tag · trades · win rate</p>'+barRows(mis)+'</div><div class="panel card"><h2>By setup</h2><p class="k" style="margin:-6px 0 8px">'+sub+'</p>'+barRows(set)+'</div></div>';
-  h+='<div class="cards"><div class="panel card"><h2>By ticker</h2><p class="k" style="margin:-6px 0 8px">'+sub+'</p>'+barRows(tick)+'</div><div class="panel card"><h2>By position type</h2><p class="k" style="margin:-6px 0 8px">'+sub+'</p>'+barRows(pos)+'</div></div>';
   var wdg=groupBy(list,function(x){return DAYN[new Date(x.c.openDate+'T12:00:00').getDay()]}),wmap={};wdg.forEach(function(g){wmap[g.k]=g});
   var wdays=['Mon','Tue','Wed','Thu','Fri'].concat(wmap.Sat?['Sat']:[]).concat(wmap.Sun?['Sun']:[]);
   var wd=wdays.map(function(d){return wmap[d]?{label:d,val:wmap[d].net,n:wmap[d].n}:{label:d,val:0,n:0}});
   var tdg=groupBy(list,function(x){return timeBucket(x.c.ex[0].time)}),tmap={};tdg.forEach(function(g){tmap[g.k]=g});
   var tb=['Pre','9:30','10','11','12–2','2–4','After'].filter(function(k){return tmap[k]||['9:30','10','11','12–2','2–4'].indexOf(k)>-1}).map(function(k){return tmap[k]?{label:k,val:tmap[k].net,n:tmap[k].n}:{label:k,val:0,n:0}});
-  h+='<div class="cards"><div class="panel card"><h2>By weekday</h2><p class="k" style="margin:-6px 0 4px">Net PnL, by the day you entered</p><div class="svgbox narrow">'+colChart(wd)+'</div></div><div class="panel card"><h2>By time of day</h2><p class="k" style="margin:-6px 0 4px">Net PnL, by entry time in New York time</p><div class="svgbox narrow">'+colChart(tb)+'</div></div></div>';
+  function card(title,note,body){return'<div class="panel card"><h2>'+title+'</h2><p class="k" style="margin:-6px 0 8px">'+note+'</p>'+body+'</div>'}
+  h+='<div class="scards">'+
+    card('Plan followed or not','Average PnL per trade · trades · win rate',barRows(pg))+card('Cost of each mistake','Net PnL of trades with the tag · trades · win rate',barRows(mis))+
+    card('By setup',sub,barRows(set))+card('By emotion',sub,barRows(emo))+
+    card('By ticker',sub,barRows(tick))+card('By position type',sub,barRows(pos))+
+    card('By weekday','Net PnL, by the day you entered','<div class="svgbox colbox">'+colChart(wd)+'</div>')+card('By time of day','Net PnL, by entry time in New York time','<div class="svgbox colbox">'+colChart(tb)+'</div>')+
+    '</div>';
   return h;
 };
 

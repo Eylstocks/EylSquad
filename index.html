@@ -194,6 +194,10 @@ main{padding:18px 14px 80px}
 .tbl .mgh td>div{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .mgh-t{font-weight:600}.mgh-s{display:flex;gap:14px;flex-wrap:wrap;font-size:13px;color:var(--ink2)}
 @media (max-width:820px){.acprof{grid-template-columns:1fr}}
+.grprow{display:flex;align-items:center;gap:4px;margin:0 0 6px}.grprow .grp,.grprow .k{margin:0}
+.eyebtn{padding:3px}
+.expf{grid-column:span 2}.expwrap{display:flex;gap:6px}.expwrap input{flex:1;min-width:0}.expwrap select{width:auto;flex:0 0 auto;max-width:60%}
+.riskline:empty,#wlplan:empty{display:none}.riskline b{font-weight:600}
 .fbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 0 10px}
 .fbar input,.fbar select{width:auto;min-width:0;padding:6px 10px;font-size:13px}
 .fbar input{flex:1 1 180px;max-width:260px}
@@ -236,7 +240,7 @@ var BREAKERS=['Moved stop','No setup','Revenge trade'];
 var DEF_SETUPS=['Reversal','Breakout','Pullback','Trend continuation','Range'];
 var DEF_TAGS=['Moved stop','Chased entry','Exited early','Oversized','No setup','Revenge trade'];
 var DIRS={option:[['short put','Short put'],['long put','Long put'],['long call','Long call'],['short call','Short call']],stock:[['long','Long'],['short','Short']]};
-var ICON={view:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>',edit:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></svg>',trash:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>'};
+var ICON={eyeoff:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3l18 18"/><path d="M10.6 5.1A10.4 10.4 0 0 1 12 5c6.4 0 10 7 10 7a17.6 17.6 0 0 1-3.2 4.2M6.6 6.6C3.7 8.5 2 12 2 12s3.6 7 10 7c1.6 0 3-.4 4.3-1"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>',view:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>',edit:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></svg>',trash:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>'};
 
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
 function uid(){return Math.random().toString(36).slice(2,9)+Date.now().toString(36).slice(-3)}
@@ -352,9 +356,13 @@ function delImg(id){
 }
 
 /* ui helpers */
+/* Account amounts start hidden on every open; one switch covers every page. */
+var hideAmt=true;
+function bigAmt(v){return hideAmt?'$•••••':money(v)}
+function eyeBtn(){var l=(hideAmt?'Show':'Hide')+' account amounts';return'<button class="icon eyebtn" data-act="togglehide" aria-pressed="'+!hideAmt+'" aria-label="'+l+'" title="'+l+'">'+(hideAmt?ICON.eyeoff:ICON.view)+'</button>'}
 var view={name:'dashboard'},draft=null,toastT=null,pendingRestore=null,downloads=null,armT=null;
 function $(s){return document.querySelector(s)}
-function toast(msg,undo){var el=$('#toast');el.hidden=false;el.innerHTML='<span>'+esc(msg)+'</span>'+(undo?'<button data-act="undo">Undo</button>':'');el._undo=undo||null;clearTimeout(toastT);toastT=setTimeout(function(){el.hidden=true},undo?7000:3500)}
+function toast(msg,undo,label){var el=$('#toast');el.hidden=false;el.innerHTML='<span>'+esc(msg)+'</span>'+(undo?'<button data-act="undo">'+esc(label||'Undo')+'</button>':'');el._undo=undo||null;clearTimeout(toastT);toastT=setTimeout(function(){el.hidden=true},undo?7000:3500)}
 function go(name,params){view=Object.assign({name:name},params||{});render();window.scrollTo(0,0)}
 function renderBrand(){
   var el=$('#brand'),logo=state&&state.brand&&state.brand.logo;if(!el||el.dataset.logo===(logo||''))return;
@@ -365,7 +373,7 @@ function render(){
   var cur=(view.name==='detail'||view.name==='deleted')?(view.from||'dashboard'):view.name;document.querySelectorAll('.navb').forEach(function(b){b.classList.toggle('on',b.dataset.go===cur)});
   renderBrand();$('#main').dataset.view=view.name;
   $('#main').innerHTML=VIEWS[view.name]();hydrate();
-  if(view.name==='form'){renderExecs();renderShots()}
+  if(view.name==='form'){renderExecs();renderShots();updRisk();updPlanLink()}
 }
 
 /* dashboard */
@@ -448,7 +456,7 @@ function openTradesHtml(open,bal){
     var unit=t.market==='option'?'contract':'share',verb=c.entrySide==='sell'?'Sold':'Bought';
     var pos=c.xq>0?c.xq+' of '+plural(c.eq,unit)+' closed':verb+' '+c.eq+' @ '+num(c.avgIn);
     var e=openExposure(t,c),pc=(e.maxL!==null&&bal>0)?e.maxL/bal*100:null;
-    var lossHtml='<span class="'+((pc!=null&&pc>=100)||(e.maxL===null&&!e.stock)?'loss':'')+'">'+moneyOrUnl(e.maxL)+(pc!=null?' ('+pctFmt(pc)+' of balance)':'')+'</span>';
+    var lossHtml='<span class="'+((pc!=null&&pc>=100)||(e.maxL===null&&!e.stock)?'loss':'')+'">'+moneyOrUnl(e.maxL)+(pc!=null&&!hideAmt?' ('+pctFmt(pc)+' of balance)':'')+'</span>';
     var line=e.stock?'Risk to stop '+lossHtml:'Max profit '+moneyOrUnl(e.maxP)+' · Max loss '+lossHtml;
     h+='<div class="orow"><div><button class="btn link" data-act="view" data-id="'+t.id+'" style="padding:0;font-size:15px;font-weight:600" aria-label="View '+esc(t.symbol)+'">'+esc(t.symbol)+'</button><p class="k">'+esc(typeLabel(t))+'</p></div><div>'+pill+'<p class="k" style="margin-top:4px">'+pos+'</p></div><div><p class="k">Stock in '+num(t.stockIn)+' · Stop '+num(t.stop)+'</p><p style="font-size:13px;font-weight:500;margin:0">'+line+'</p></div><div class="orow-act">'+(isOpt&&dte<=0?'<button class="btn sm primary" data-act="expiredworthless" data-id="'+t.id+'">Expired worthless</button>':'')+'<button class="btn sm" data-act="addexit" data-id="'+t.id+'">Add exit</button></div></div>';
   });
@@ -458,7 +466,7 @@ function openRiskCell(open,bal){
   var tot=0,unl=false;
   open.forEach(function(x){var e=openExposure(x.t,x.c);if(e.maxL===null)unl=true;else tot+=e.maxL});
   var pct=!unl&&bal>0?tot/bal*100:null;
-  return'<div title="Max loss on open options, and risk to your stop on open stocks"><p class="k">Open risk</p><p class="big2 '+((unl||(pct!=null&&pct>=100))?'loss':'')+'">'+(unl?'Unlimited':money(tot))+'</p>'+(pct!=null?'<p class="k">'+pctFmt(pct)+' of balance</p>':'')+'</div>';
+  return'<div title="Max loss on open options, and risk to your stop on open stocks"><p class="k">Open risk</p><p class="big2 '+((unl||(pct!=null&&pct>=100))?'loss':'')+'">'+(unl?'Unlimited':money(tot))+'</p>'+(pct!=null&&!hideAmt?'<p class="k">'+pctFmt(pct)+' of balance</p>':'')+'</div>';
 }
 function applyFilters(list){
   var q=tf.q.trim().toLowerCase();
@@ -491,15 +499,15 @@ function sessionStrip(all){
   var t=nyNow().date,wk=addDays(t,-((new Date(t+'T12:00:00').getDay()+6)%7)),mo=t.slice(0,7),closed=ascClosed(all),byDay={};
   closed.forEach(function(x){byDay[x.c.closeDate]=(byDay[x.c.closeDate]||0)+x.c.net});
   function agg(f){var l=closed.filter(f);return{n:l.length,net:sum(l,function(x){return x.c.net})}}
-  var td=agg(function(x){return x.c.closeDate===t}),wkA=agg(function(x){return x.c.closeDate>=wk&&x.c.closeDate<=t});
+  var moA=agg(function(x){return x.c.closeDate.slice(0,7)===mo}),wkA=agg(function(x){return x.c.closeDate>=wk&&x.c.closeDate<=t});
   var st=0,sign=0;
   for(var i=closed.length-1;i>=0;i--){var s=Math.sign(closed[i].c.net);if(!s)continue;if(!sign)sign=s;if(s!==sign)break;st++}
   var days=Object.keys(byDay).filter(function(d){return d.slice(0,7)===mo}),best=null,worst=null;
   days.forEach(function(d){var v=byDay[d];if(v>0&&(!best||v>best.v))best={d:d,v:v};if(v<0&&(!worst||v<worst.v))worst={d:d,v:v}});
   function cell(label,val,cls,sub){return'<div><p class="k">'+label+'</p><p class="big2 '+cls+'">'+val+'</p><p class="k">'+sub+'</p></div>'}
-  return'<p class="grp">Session · closed trades, before fees</p><div class="panel strip">'+
-    cell('Today',td.n?sMoney(td.net):'—',td.n?plCls(td.net):'mut',td.n?plural(td.n,'trade'):'No closed trades')+
+  return'<p class="grp">This week and month · closed trades, before fees</p><div class="panel strip">'+
     cell('This week',wkA.n?sMoney(wkA.net):'—',wkA.n?plCls(wkA.net):'mut',wkA.n?plural(wkA.n,'trade'):'No closed trades')+
+    cell('This month',moA.n?sMoney(moA.net):'—',moA.n?plCls(moA.net):'mut',moA.n?plural(moA.n,'trade'):'No closed trades')+
     cell('Streak',st?st+' '+(sign>0?(st===1?'win':'wins'):(st===1?'loss':'losses')):'—',st?(sign>0?'win':'loss'):'mut','Most recent trades')+
     cell('Best day this month',best?sMoney(best.v):'—',best?'win':'mut',best?longDate(best.d):'No green days yet')+
     cell('Worst day this month',worst?sMoney(worst.v):'—',worst?'loss':'mut',worst?longDate(worst.d):'No red days yet')+'</div>';
@@ -549,7 +557,7 @@ VIEWS.dashboard=function(){
   h+=sessionStrip(all);
   h+=openTradesHtml(open,bal);
   var riskCell=open.length?openRiskCell(open,bal):'';
-  h+='<p class="grp">Account</p><div class="panel acct'+(open.length?' risk':'')+'"><div><p class="k">Balance</p><p class="big2">'+money(bal)+'</p></div><div><p class="k">Net deposited</p><p class="big2">'+money(dep)+'</p></div><div><p class="k">Return on deposits</p><p class="big2 '+(ret==null?'mut':ret>=0?'win':'loss')+'">'+(ret==null?'—':(ret>0?'+':'')+ret.toFixed(2)+'%')+'</p></div>'+riskCell+'<p class="formula">'+money(dep)+' deposited '+(allPnl<0?'−':'+')+' '+money(Math.abs(allPnl))+' trading − '+money(Math.abs(allFees))+' fees</p></div>';
+  h+='<div class="grprow"><p class="grp">Account</p>'+eyeBtn()+'</div><div class="panel acct'+(open.length?' risk':'')+'"><div><p class="k">Balance</p><p class="big2">'+bigAmt(bal)+'</p></div><div><p class="k">Net deposited</p><p class="big2">'+bigAmt(dep)+'</p></div><div><p class="k">Return on deposits</p><p class="big2 '+(ret==null?'mut':ret>=0?'win':'loss')+'">'+(ret==null?'—':(ret>0?'+':'')+ret.toFixed(2)+'%')+'</p></div>'+riskCell+(hideAmt?'<p class="formula">Amounts hidden</p>':'<p class="formula">'+money(dep)+' deposited '+(allPnl<0?'−':'+')+' '+money(Math.abs(allPnl))+' trading − '+money(Math.abs(allFees))+' fees</p>')+'</div>';
   h+='<p class="grp">Trading results · closed trades only, before fees · '+periodLabel()+'</p><div class="panel strip5"><div><p class="k">Trading P/L</p><p class="big '+(!S.n?'mut':S.net>0?'win':S.net<0?'loss':'')+'">'+(S.n?sMoney(S.net):'—')+'</p></div><div><p class="k">Win rate</p><p class="big '+(S.n?(S.winRate>=.5?'win':'loss'):'mut')+'">'+(S.n?pctFmt(S.winRate*100):'—')+'</p></div><div><p class="k">Profit factor</p><p class="big">'+(S.pf==null?'—':S.pf.toFixed(2))+'</p></div><div><p class="k">Avg win / avg loss</p><p class="big2" style="margin-top:2px;white-space:nowrap">'+(S.avgWin==null?'—':money(S.avgWin))+' / '+(S.avgLoss==null?'—':money(S.avgLoss))+'</p></div><div><p class="k">Followed plan</p><p class="big">'+(decided.length?pctFmt(fol/decided.length*100):'—')+'</p></div></div>';
   h+=costliestMistake(all);
   h+='<div class="panel" style="padding:16px 18px;margin-bottom:16px"><div class="curvehead"><div class="seg" role="group" aria-label="Curve"><button class="chip'+(mode==='pnl'?' on':'')+'" data-act="curve" data-v="pnl">Trading PnL</button><button class="chip'+(mode==='balance'?' on':'')+'" data-act="curve" data-v="balance">Balance</button></div><span class="k">'+(mode==='pnl'?'Before fees. Deposits and withdrawals never move this line.':'Includes deposits, withdrawals, trades and fees.')+'</span></div><div class="svgbox chartbox">'+chartSvg(mode==='pnl'?pnlRows(closed):led,mode==='pnl'?'Close a trade to start your trading curve.':'Your balance curve shows up after your first deposit and trade.',mode==='pnl'?sMoney:money,mode==='pnl')+'</div></div>';
@@ -733,14 +741,81 @@ function blankDraft(){var n=nyNow();return{id:null,symbol:'',market:'option',dir
 function draftFrom(t){var d=JSON.parse(JSON.stringify(t));['strike','stockIn','stop','target','stockOut'].forEach(function(k){d[k]=t[k]===''||t[k]==null?'':String(t[k])});d.execs=d.execs.map(function(x){return Object.assign({},x,{qty:String(x.qty),price:String(x.price),fee:String(x.fee)})});d._orig=t.shots.slice();d._plan0=t.plan;return d}
 function entrySide(d){return/^short/.test(d.dir)?'sell':'buy'}
 function chipRow(kind,list,cur,bad){return list.map(function(v){var on=Array.isArray(cur)?cur.indexOf(v)>-1:cur===v;return'<button type="button" class="chip'+(bad?' bad':'')+(on?' on':'')+'" data-act="chip" data-kind="'+kind+'" data-v="'+esc(v)+'" aria-pressed="'+on+'">'+esc(v)+'</button>'}).join('')}
+/* ---------- new trade: expirations, risk preview, drafts ---------- */
+/* Option expiration schedules. Nasdaq reviews eligibility each quarter; update these lists when it changes. */
+var EXP_DAILY=['SPY','QQQ','IWM'];
+var EXP_MWF=['AAPL','AMZN','GOOG','META','MSFT','NVDA','TSLA','AVGO','IBIT','GLD','SLV','TLT'];
+var EXP_WF=['USO','UNG'];
+function expWeekdays(sym){sym=String(sym||'').trim().toUpperCase();return EXP_DAILY.indexOf(sym)>-1?[1,2,3,4,5]:EXP_MWF.indexOf(sym)>-1?[1,3,5]:EXP_WF.indexOf(sym)>-1?[3,5]:[5]}
+function dow(d){return new Date(d+'T12:00:00').getDay()}
+function isTradingDay(d){var w=dow(d);return w>0&&w<6&&!WL_HOL[d]}
+function prevTradingDay(d){do{d=addDays(d,-1)}while(!isTradingDay(d));return d}
+function thirdFriday(m){var d=m+'-01';while(dow(d)!==5)d=addDays(d,1);return addDays(d,14)}
+/* a Friday expiration on a market holiday moves to the day before; other holiday expirations are skipped */
+function settle(d){return isTradingDay(d)?d:dow(d)===5?prevTradingDay(d):null}
+function expiries(sym){
+  var n=nyNow(),start=n.time<'16:00:00'?n.date:addDays(n.date,1),end=addDays(n.date,14),days=expWeekdays(sym),out={};
+  for(var d=n.date;d<=end;d=addDays(d,1)){if(days.indexOf(dow(d))<0)continue;var x=settle(d);if(x&&x>=start&&!out[x])out[x]='week'}
+  for(var m=n.date.slice(0,7),found=0;found<2;m=addDays(m+'-28',7).slice(0,7)){var x2=settle(thirdFriday(m));if(x2>=start){out[x2]='monthly';found++}}
+  return Object.keys(out).sort().map(function(d){return{d:d,monthly:out[d]==='monthly'}});
+}
+function weekStart(d){return addDays(d,-((dow(d)+6)%7))}
+function expLabel(o){
+  var t=nyNow().date,dte=daysBetween(t,o.d),endOfWeek=dow(o.d)===5||(dow(o.d)===4&&WL_HOL[addDays(o.d,1)]);
+  var base=dow(t)===6?addDays(t,2):dow(t)===0?addDays(t,1):t,wk=daysBetween(weekStart(base),weekStart(o.d))/7,note=o.monthly?'monthly':endOfWeek&&wk===0?'this week':endOfWeek&&wk===1?'next week':'';
+  return(dte===0?'Today':DAYN[dow(o.d)]+' '+md(o.d))+' · '+dte+' DTE'+(note?' · '+note:'');
+}
+function quickPickOptions(){return'<option value="">Quick pick</option>'+expiries(draft&&draft.symbol).map(function(o){return'<option value="'+o.d+'">'+esc(expLabel(o))+'</option>'}).join('')}
+function riskPreview(d){
+  var ex=d.execs.filter(function(x){return+x.qty>0&&x.price!==''&&+x.price>=0}),c=calc({market:d.market,dir:d.dir,execs:ex});
+  if(!c.eq||c.avgIn==null)return'';
+  var q=c.eq,p=c.avgIn,maxL=null,maxP=null,parts=[];
+  if(d.market==='option'){
+    var s=+d.strike;if(!(s>0))return'';
+    var put=/put/.test(d.dir),short=/^short/.test(d.dir),prem=p*q*100;
+    if(short){maxP=prem;maxL=put?(s-p)*q*100:Infinity}else{maxL=prem;maxP=put?(s-p)*q*100:Infinity}
+  }else{
+    var st=+d.stop,tg=+d.target,lng=d.dir==='long';
+    if(st>0)maxL=Math.max(0,(lng?p-st:st-p)*q);
+    if(tg>0)maxP=Math.max(0,(lng?tg-p:p-tg)*q);
+  }
+  var bal=currentBalance(),pct=maxL!=null&&isFinite(maxL)&&bal>0&&!hideAmt?' ('+pctFmt(maxL/bal*100)+' of balance)':'';
+  function amt(v){return isFinite(v)?money(v):'Unlimited'}
+  if(d.market==='option'){
+    parts.push('Max loss <b class="loss">'+amt(maxL)+'</b>'+pct);
+    parts.push('Max profit <b>'+amt(maxP)+'</b>');
+    parts.push('Breakeven <b>'+num(/put/.test(d.dir)?+d.strike-p:+d.strike+p)+'</b> at expiration');
+  }else{
+    if(maxL!=null)parts.push('Risk to stop <b class="loss">'+money(maxL)+'</b>'+pct);
+    if(maxP!=null)parts.push('Reward to target <b>'+money(maxP)+'</b>');
+    if(maxL>0&&maxP!=null)parts.push('Risk/reward 1 : '+(maxP/maxL).toFixed(1));
+  }
+  return parts.join(' · ');
+}
+function updRisk(){var el=$('#riskline');if(el&&draft)el.innerHTML=riskPreview(draft)}
+function updPlanLink(){
+  var el=$('#wlplan');if(!el||!draft)return;
+  var plan=window.wlPlanFor?window.wlPlanFor(draft.symbol,updPlanLink):null;
+  var show=plan&&plan!==draft.plan.trim()?plan:'';if(el.dataset.plan===show)return;el.dataset.plan=show;
+  el.innerHTML=show?'Use watchlist plan: <button type="button" class="btn link" data-act="usewlplan" style="padding:0">“'+esc(plan)+'”</button>':'';
+}
+/* unsaved work: a draft is dirty when it differs from how it was opened */
+function draftSig(d){var c=Object.assign({},d);delete c._base;delete c._resumed;return JSON.stringify(c)}
+function freshDraft(d){d._base=draftSig(d);return d}
+function draftDirty(){return!!(draft&&draft._base!==draftSig(draft))}
+function dropDraftImages(){if(draft)draft.shots.forEach(function(id){if((draft._orig||[]).indexOf(id)<0)delImg(id)})}
+function discardDraft(){dropDraftImages();draft=null;if(view.name==='form')render()}
+window.addEventListener('beforeunload',function(e){if(draftDirty()){e.preventDefault();e.returnValue=''}});
+document.addEventListener('keydown',function(e){if(view.name==='form'&&e.key==='Enter'&&(e.ctrlKey||e.metaKey)){e.preventDefault();saveTrade()}});
 VIEWS.form=function(){
-  if(!draft)draft=blankDraft();var d=draft,editing=!!d.id,isOpt=d.market==='option',hasExit=d.execs.some(function(x){return x.side!==entrySide(d)});
+  if(!draft)draft=freshDraft(blankDraft());var d=draft,editing=!!d.id,isOpt=d.market==='option',hasExit=d.execs.some(function(x){return x.side!==entrySide(d)});
   var syms=Array.from(new Set(state.trades.map(function(t){return t.symbol})));
   var h='<div class="top"><div><h1>'+(editing?'Edit trade':'New trade')+'</h1><p class="sub">'+(editing?'Changes update every screen.':'Save the entry now. Add the exit when you get out.')+'</p></div>'+(!editing&&live().length?'<button class="btn sm" data-act="copylast">Copy last trade</button>':'')+'</div>';
+  if(d._resumed){h+='<div class="callout"><span>Continuing your unsaved '+(editing?'changes to '+esc(d.symbol):'trade'+(d.symbol?' ('+esc(d.symbol.toUpperCase())+')':''))+'.</span><button class="btn sm" data-act="discarddraft">Discard</button></div>';d._resumed=false}
   h+='<div id="errs"></div><datalist id="syms">'+syms.map(function(s){return'<option value="'+esc(s)+'">'}).join('')+'</datalist>';
-  h+='<div class="sec"><div class="grid"><label class="f"><span>Symbol</span><input data-f="symbol" list="syms" value="'+esc(d.symbol)+'" autocomplete="off" placeholder="SPY" style="text-transform:uppercase"></label><label class="f"><span>Market</span><select data-f="market" data-rerender="1"><option value="option"'+(isOpt?' selected':'')+'>Option</option><option value="stock"'+(!isOpt?' selected':'')+'>Stock</option></select></label><label class="f"><span>Direction</span><select data-f="dir" data-rerender="1">'+DIRS[d.market].map(function(o){return'<option value="'+o[0]+'"'+(d.dir===o[0]?' selected':'')+'>'+o[1]+'</option>'}).join('')+'</select></label>'+(isOpt?'<label class="f"><span>Strike</span><input data-f="strike" type="number" step="any" inputmode="decimal" value="'+esc(d.strike)+'"></label><label class="f"><span>Expiration</span><input data-f="expiry" type="date" value="'+esc(d.expiry)+'"></label>':'')+'</div><div class="grid" style="margin-top:12px"><label class="f"><span>Stock price at entry</span><input data-f="stockIn" type="number" step="any" inputmode="decimal" value="'+esc(d.stockIn)+'"></label><label class="f"><span>Stop</span><input data-f="stop" type="number" step="any" inputmode="decimal" value="'+esc(d.stop)+'"></label><label class="f"><span>Target (optional)</span><input data-f="target" type="number" step="any" inputmode="decimal" value="'+esc(d.target)+'"></label></div></div>';
-  h+='<div class="sec"><h2>Executions <span class="mut" style="font-weight:400">· New York time · fee is per '+(isOpt?'contract':'share')+'</span></h2><div id="execs"></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn sm" data-act="addex">Add execution</button></div><p class="hint" id="exhint"></p></div>';
-  h+='<div class="sec"><label class="f"><span>Plan · why you\'re taking this trade</span><textarea data-f="plan" rows="2" placeholder="Needs a retest of demand before I buy the call">'+esc(d.plan)+'</textarea></label></div>';
+  h+='<div class="sec"><div class="grid"><label class="f"><span>Symbol</span><input data-f="symbol" list="syms" value="'+esc(d.symbol)+'" autocomplete="off" placeholder="SPY" style="text-transform:uppercase"></label><label class="f"><span>Market</span><select data-f="market" data-rerender="1"><option value="option"'+(isOpt?' selected':'')+'>Option</option><option value="stock"'+(!isOpt?' selected':'')+'>Stock</option></select></label><label class="f"><span>Direction</span><select data-f="dir" data-rerender="1">'+DIRS[d.market].map(function(o){return'<option value="'+o[0]+'"'+(d.dir===o[0]?' selected':'')+'>'+o[1]+'</option>'}).join('')+'</select></label>'+(isOpt?'<label class="f"><span>Strike</span><input data-f="strike" type="number" step="any" inputmode="decimal" value="'+esc(d.strike)+'"></label><div class="f expf"><span>Expiration</span><div class="expwrap"><input data-f="expiry" type="date" value="'+esc(d.expiry)+'" aria-label="Expiration"><select id="qp" data-qp="1" aria-label="Quick pick expiration">'+quickPickOptions()+'</select></div></div>':'')+'</div><div class="grid" style="margin-top:12px"><label class="f"><span>Stock price at entry</span><input data-f="stockIn" type="number" step="any" inputmode="decimal" value="'+esc(d.stockIn)+'"></label><label class="f"><span>Stop</span><input data-f="stop" type="number" step="any" inputmode="decimal" value="'+esc(d.stop)+'"></label><label class="f"><span>Target (optional)</span><input data-f="target" type="number" step="any" inputmode="decimal" value="'+esc(d.target)+'"></label></div></div>';
+  h+='<div class="sec"><h2>Executions <span class="mut" style="font-weight:400">· New York time · fee is per '+(isOpt?'contract':'share')+'</span></h2><div id="execs"></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn sm" data-act="addex">Add execution</button></div><p class="hint" id="exhint"></p><p class="hint riskline" id="riskline"></p></div>';
+  h+='<div class="sec"><label class="f"><span>Plan · why you\'re taking this trade</span><textarea data-f="plan" rows="2" placeholder="Needs a retest of demand before I buy the call">'+esc(d.plan)+'</textarea></label><p class="hint" id="wlplan"></p></div>';
   h+='<details class="sec"'+(hasExit||editing?' open':'')+'><summary style="cursor:pointer;font-weight:600;font-size:15px;margin-bottom:12px">After the trade</summary><div class="grid" style="max-width:340px;margin-bottom:16px"><label class="f"><span>Stock price at exit</span><input data-f="stockOut" type="number" step="any" inputmode="decimal" value="'+esc(d.stockOut)+'"></label></div>'+
     '<p class="k" style="margin-bottom:6px">Followed plan</p><div class="seg" id="chips-followed"><button type="button" class="chip'+(d.followed===true?' on':'')+'" data-act="chip" data-kind="followed" data-v="yes" aria-pressed="'+(d.followed===true)+'">Yes</button><button type="button" class="chip bad'+(d.followed===false?' on':'')+'" data-act="chip" data-kind="followed" data-v="no" aria-pressed="'+(d.followed===false)+'">No</button></div><div id="breaker" hidden class="callout" style="margin-top:10px"><span>That tag usually means the plan wasn\'t followed. Mark Followed plan as No?</span><span><button type="button" class="btn sm" data-act="breakyes">Mark No</button> <button type="button" class="btn sm" data-act="breakno">Keep Yes</button></span></div>'+
     '<p class="k" style="margin:16px 0 6px">How you felt</p><div class="seg" id="chips-emotion">'+chipRow('emotion',state.lists.emotions,d.emotion)+'<input class="mini" data-add="emotions" placeholder="+ Add emotion" aria-label="Add an emotion"></div>'+
@@ -756,6 +831,7 @@ function renderExecs(){
   el.innerHTML=d.execs.map(function(x,i){return'<div class="ex" data-i="'+i+'"><label class="f"><span>Side</span><select data-ex="side"><option value="sell"'+(x.side==='sell'?' selected':'')+'>Sell</option><option value="buy"'+(x.side==='buy'?' selected':'')+'>Buy</option></select></label><label class="f"><span>Date</span><input data-ex="date" type="date" value="'+esc(x.date)+'"></label><label class="f"><span>Time</span><input data-ex="time" type="time" step="1" value="'+esc(x.time)+'"></label><label class="f"><span>Qty</span><input data-ex="qty" type="number" min="1" step="any" inputmode="decimal" value="'+esc(x.qty)+'"></label><label class="f"><span>Price</span><input data-ex="price" type="number" step="any" inputmode="decimal" value="'+esc(x.price)+'"></label><label class="f"><span>Fee</span><input data-ex="fee" type="number" step="any" inputmode="decimal" value="'+esc(x.fee)+'"></label><button type="button" class="icon" data-act="rmex" data-i="'+i+'" aria-label="Remove execution"'+(d.execs.length<2?' hidden':'')+'>'+ICON.trash+'</button></div>'}).join('');
   var c=d.execs.length?calc({market:d.market,dir:d.dir,execs:d.execs}):null;
   $('#exhint').textContent=c&&c.closed?'Exit recorded. This trade will be saved as closed.':'No exit yet. This trade will be saved as Open until you add one.';
+  updRisk();
 }
 function renderShots(){
   var el=$('#shots');if(!el)return;
@@ -790,12 +866,12 @@ function saveTrade(){
   save();var closed=calc(t).closed;draft=null;
   go('dashboard');toast(closed?'Trade saved':'Entry saved. It stays open until you add the exit.');
 }
-function cancelForm(){if(draft)draft.shots.forEach(function(id){if((draft._orig||[]).indexOf(id)<0)delImg(id)});draft=null;go('dashboard')}
+function cancelForm(){dropDraftImages();draft=null;go('dashboard')}
 function startEdit(id,addExit){
   var t=state.trades.find(function(x){return x.id===id});if(!t)return;
   draft=draftFrom(t);
   if(addExit&&!calc(t).closed){var n=nyNow(),c=calc(t);draft.execs.push({id:uid(),side:c.entrySide==='sell'?'buy':'sell',date:n.date,time:n.time,qty:String(c.eq),price:'',fee:String(state.settings.fee)})}
-  go('form');
+  freshDraft(draft);go('form');
 }
 function softDelete(id){
   var t=state.trades.find(function(x){return x.id===id});if(!t)return;t.deletedAt=nyNow().date;t.updatedAt=Date.now();save();
@@ -820,7 +896,7 @@ function cashPreview(){
   var bal=currentBalance(),orig=c.id&&state.cash.find(function(x){return x.id===c.id});
   if(orig)bal-=orig.type==='deposit'?+orig.amount:-orig.amount;
   var after=bal+(c.type==='deposit'?amt:-amt),label=c.type==='deposit'?'deposit':'withdrawal';
-  return'Balance after this '+label+': <b class="'+(after<0?'loss':'')+'">'+money(after)+'</b>'+(after<0?' · <span class="loss">This is more than your balance.</span>':'');
+  return'Balance after this '+label+': <b class="'+(after<0?'loss':'')+'">'+bigAmt(after)+'</b>'+(after<0?' · <span class="loss">This is more than your balance.</span>':'');
 }
 function profileSection(){
   var u=window.auth&&window.auth.currentUser;
@@ -838,16 +914,16 @@ function ledgerSection(){
     if(f==='all'||(f==='cash')===(r.kind==='deposit'||r.kind==='withdraw'))g.rows.push(r);
   });
   var keys=Object.keys(months).sort().reverse().filter(function(m){return months[m].rows.length});
-  function part(label,v,cls){return v?'<span>'+label+' <b class="'+cls+'">'+sMoney(v)+'</b></span>':''}
+  function part(label,v,cls,mask){return v?'<span>'+label+' <b class="'+(mask?'':cls)+'">'+(mask?'$•••••':sMoney(v))+'</b></span>':''}
   var h='<div class="sec"><div class="curvehead"><h2 style="margin:0">Ledger</h2><div class="seg" role="group" aria-label="Show">'+[['all','All'],['cash','Deposits and withdrawals'],['trades','Trades and fees']].map(function(o){return'<button class="chip'+(f===o[0]?' on':'')+'" data-act="acfilter" data-v="'+o[0]+'">'+o[1]+'</button>'}).join('')+'</div></div>';
   if(!keys.length)return h+'<p class="mut">No entries match this filter.</p></div>';
   h+='<div class="panel tablewrap"><table class="tbl"><thead><tr><th>Date</th><th>Entry</th><th class="n">Amount</th><th class="n">Balance</th><th></th></tr></thead><tbody>';
   keys.forEach(function(m){
     var g=months[m],open=m in acct.open?acct.open[m]:m===cur;
-    h+='<tr class="mgh" data-act="acmonth" data-m="'+m+'" tabindex="0" aria-expanded="'+open+'"><td colspan="5"><div><span class="mgh-t">'+(open?'▾':'▸')+' '+monthName(m)+'</span><span class="mgh-s">'+part('Deposits',g.dep,'win')+part('Withdrawals',g.wd,'loss')+part('Trading',g.pl,plCls(g.pl))+part('Fees',g.fee,'loss')+'<span>Month-end balance <b>'+money(g.end)+'</b></span></span></div></td></tr>';
+    h+='<tr class="mgh" data-act="acmonth" data-m="'+m+'" tabindex="0" aria-expanded="'+open+'"><td colspan="5"><div><span class="mgh-t">'+(open?'▾':'▸')+' '+monthName(m)+'</span><span class="mgh-s">'+part('Deposits',g.dep,'win',hideAmt)+part('Withdrawals',g.wd,'loss',hideAmt)+part('Trading',g.pl,plCls(g.pl))+part('Fees',g.fee,'loss')+'<span>Month-end balance <b>'+bigAmt(g.end)+'</b></span></span></div></td></tr>';
     if(!open)return;
     g.rows.slice().reverse().forEach(function(r){
-      h+='<tr><td>'+fmtDate(r.date)+'</td><td>'+esc(r.label)+(r.note?' <span class="mut">· '+esc(r.note)+'</span>':'')+'</td><td class="n '+(r.amount<0?'loss':'win')+'">'+sMoney(r.amount)+'</td><td class="n">'+money(r.balance)+'</td><td style="text-align:right;white-space:nowrap">'+(r.cash?'<button class="icon" data-act="cashedit" data-id="'+r.cash.id+'" aria-label="Edit entry" title="Edit">'+ICON.edit+'</button><button class="icon" data-act="cashdel" data-id="'+r.cash.id+'" aria-label="Delete entry" title="Delete">'+ICON.trash+'</button>':'<button class="btn link" data-act="opentrade" data-id="'+r.id+'">View</button>')+'</td></tr>';
+      h+='<tr><td>'+fmtDate(r.date)+'</td><td>'+esc(r.label)+(r.note?' <span class="mut">· '+esc(r.note)+'</span>':'')+'</td><td class="n '+(r.amount<0?'loss':'win')+'">'+(r.cash&&hideAmt?'$•••••':sMoney(r.amount))+'</td><td class="n">'+bigAmt(r.balance)+'</td><td style="text-align:right;white-space:nowrap">'+(r.cash?'<button class="icon" data-act="cashedit" data-id="'+r.cash.id+'" aria-label="Edit entry" title="Edit">'+ICON.edit+'</button><button class="icon" data-act="cashdel" data-id="'+r.cash.id+'" aria-label="Delete entry" title="Delete">'+ICON.trash+'</button>':'<button class="btn link" data-act="opentrade" data-id="'+r.id+'">View</button>')+'</td></tr>';
     });
   });
   return h+'</tbody></table></div></div>';
@@ -858,7 +934,7 @@ VIEWS.account=function(){
   var c=cashDraft,led=ledger().slice().reverse(),years=Array.from(new Set(live().map(function(t){return calc(t)}).filter(function(x){return x.closed}).map(function(x){return x.closeDate.slice(0,4)})));
   var cy=nyNow().date.slice(0,4);if(years.indexOf(cy)<0)years.push(cy);years.sort().reverse();
   var h='<div class="top"><div><h1>Account</h1><p class="sub">Your balance is deposits and withdrawals plus closed trades, minus fees.</p></div></div>';
-  h+='<div class="sec"><h2>'+(c.id?'Edit entry':'Deposit or withdraw')+'</h2><p class="k">Current balance</p><p class="big2" style="margin-bottom:12px">'+money(currentBalance())+'</p><div class="grid" style="align-items:end;max-width:760px"><div><p class="k" style="margin-bottom:4px">Type</p><div class="seg"><button class="chip'+(c.type==='deposit'?' on':'')+'" data-act="cashtype" data-v="deposit">Deposit</button><button class="chip'+(c.type==='withdraw'?' on':'')+'" data-act="cashtype" data-v="withdraw">Withdraw</button></div></div><label class="f"><span>Date</span><input data-cash="date" type="date" value="'+esc(c.date)+'"></label><label class="f"><span>Amount</span><input data-cash="amount" type="number" min="0" step="any" inputmode="decimal" value="'+esc(c.amount)+'"></label><label class="f"><span>Note (optional)</span><input data-cash="note" value="'+esc(c.note)+'"></label></div><p id="cprev" class="hint">'+cashPreview()+'</p><div id="cerr" class="loss hint"></div><div style="display:flex;gap:8px;margin-top:8px"><button class="btn primary" data-act="cashsave">'+(c.id?'Save changes':'Add entry')+'</button>'+(c.id?'<button class="btn" data-act="cashcancel">Cancel</button>':'')+'</div></div>';
+  h+='<div class="sec"><h2>'+(c.id?'Edit entry':'Deposit or withdraw')+'</h2><div class="grprow"><p class="k">Current balance</p>'+eyeBtn()+'</div><p class="big2" style="margin-bottom:12px">'+bigAmt(currentBalance())+'</p><div class="grid" style="align-items:end;max-width:760px"><div><p class="k" style="margin-bottom:4px">Type</p><div class="seg"><button class="chip'+(c.type==='deposit'?' on':'')+'" data-act="cashtype" data-v="deposit">Deposit</button><button class="chip'+(c.type==='withdraw'?' on':'')+'" data-act="cashtype" data-v="withdraw">Withdraw</button></div></div><label class="f"><span>Date</span><input data-cash="date" type="date" value="'+esc(c.date)+'"></label><label class="f"><span>Amount</span><input data-cash="amount" type="number" min="0" step="any" inputmode="decimal" value="'+esc(c.amount)+'"></label><label class="f"><span>Note (optional)</span><input data-cash="note" value="'+esc(c.note)+'"></label></div><p id="cprev" class="hint">'+cashPreview()+'</p><div id="cerr" class="loss hint"></div><div style="display:flex;gap:8px;margin-top:8px"><button class="btn primary" data-act="cashsave">'+(c.id?'Save changes':'Add entry')+'</button>'+(c.id?'<button class="btn" data-act="cashcancel">Cancel</button>':'')+'</div></div>';
   h+=ledgerSection();
   h+='<div class="sec"><h2>Settings</h2><label class="f" style="max-width:220px"><span>Default fee per contract</span><input data-set="fee" type="number" min="0" step="any" value="'+esc(state.settings.fee)+'"></label><p class="hint">Applies to new executions. You can change it on any trade.</p><label class="f" style="max-width:420px;margin-top:14px"><span>Finnhub API key (earnings dates)</span><input data-set="fhKey" type="password" autocomplete="off" value="'+esc(state.settings.fhKey||'')+'"></label><p class="hint">Saved on this device. Earnings refresh once a day when the journal opens.</p>'+
     '<div class="f" style="margin-top:14px"><span style="display:block;font-size:12.5px;color:var(--ink2);font-weight:500;margin-bottom:6px">Logo</span>'+(state.brand&&state.brand.logo?'<img class="logoprev" src="'+state.brand.logo+'" alt="Current logo">':'')+'<div style="display:flex;gap:8px;margin-top:8px"><label class="btn" style="cursor:pointer">'+(state.brand&&state.brand.logo?'Replace logo':'Upload logo')+'<input type="file" accept="image/*" data-act="logoup" style="display:none"></label>'+(state.brand&&state.brand.logo?'<button class="btn" data-act="logorm">Remove</button>':'')+'</div><p class="hint">Shown at the top of the sidebar. A PNG with a transparent background works best. Synced to your other devices.</p></div></div>';
@@ -910,6 +986,9 @@ var ACT={
   addex:function(){var n=nyNow(),d=draft,has=d.execs.some(function(x){return x.side!==entrySide(d)}),c=calc({market:d.market,dir:d.dir,execs:d.execs});d.execs.push({id:uid(),side:has?entrySide(d):(entrySide(d)==='sell'?'buy':'sell'),date:n.date,time:n.time,qty:String(c.eq||1),price:'',fee:String(state.settings.fee)});renderExecs()},
   rmex:function(b){draft.execs.splice(+b.dataset.i,1);renderExecs()},
   rmshot:function(b){draft.shots=draft.shots.filter(function(i){return i!==b.dataset.id});if((draft._orig||[]).indexOf(b.dataset.id)<0)delImg(b.dataset.id);renderShots()},
+  togglehide:function(){hideAmt=!hideAmt;render()},
+  discarddraft:function(){dropDraftImages();draft=freshDraft(blankDraft());render();toast('Draft discarded')},
+  usewlplan:function(){var p=window.wlPlanFor&&window.wlPlanFor(draft.symbol);if(!p)return;draft.plan=p;var ta=$('[data-f=plan]');if(ta)ta.value=p;updPlanLink()},
   copylast:function(){var l=sortedTrades()[0];if(!l)return;var t=l.t,d=blankDraft();d.symbol=t.symbol;d.market=t.market;d.dir=t.dir;d.strike=t.strike===''?'':String(t.strike);d.execs[0].side=entrySide(d);d.execs[0].qty=String(l.c.eq||1);d.setup=t.setup||d.setup;draft=d;render()},
   chip:function(b){
     var k=b.dataset.kind,v=b.dataset.v;
@@ -954,7 +1033,12 @@ ACT.acfilter=function(b){acct.filter=b.dataset.v;render()};
 ACT.acmonth=function(b){var m=b.dataset.m,cur=nyNow().date.slice(0,7),open=m in acct.open?acct.open[m]:m===cur;acct.open[m]=!open;render()};
 document.addEventListener('click',function(e){
   var g=e.target.closest('[data-go]');
-  if(g){if(g.dataset.go==='form'){if(view.name==='form'&&draft&&!draft.id){return}draft=null}go(g.dataset.go);return}
+  if(g){
+    var to=g.dataset.go;
+    if(view.name==='form'&&to!=='form'&&draftDirty()){draft._resumed=true;go(to);toast('Unsaved trade kept. Open New trade to continue.',discardDraft,'Discard');return}
+    if(to==='form'){if(view.name==='form'&&draft&&!draft.id)return;if(!draftDirty())draft=null}
+    go(to);return;
+  }
   if(e.target.closest('#lb')){$('#lb').hidden=true;return}
   var b=e.target.closest('[data-act]');
   if(b&&b.tagName!=='INPUT'&&ACT[b.dataset.act]){e.preventDefault();ACT[b.dataset.act](b);return}
@@ -966,8 +1050,9 @@ function handle(e){
   var t=e.target;
   if(t.dataset.calm){if(e.type==='change'){cal.month=t.value;cal.sel=null;render()}return}
   if(t.dataset.period){if(e.type==='change'){state.period=t.value;save();render()}return}
-  if(t.dataset.f&&draft){draft[t.dataset.f]=t.value;if(t.dataset.rerender){if(t.dataset.f==='market'){draft.dir=DIRS[draft.market][0][0];draft.execs[0].side=entrySide(draft);draft.execs.forEach(function(x){x.fee=String(draft.market==='option'?state.settings.fee:0)})}else{draft.execs.forEach(function(x,i){if(i===0)x.side=entrySide(draft)})}if(e.type==='change')render()}else if(t.dataset.f==='dir'&&e.type==='change')render()}
-  else if(t.dataset.ex&&draft){var i=+t.closest('.ex').dataset.i;draft.execs[i][t.dataset.ex]=t.value;if(t.dataset.ex==='side'||t.dataset.ex==='qty'){var c=calc({market:draft.market,dir:draft.dir,execs:draft.execs});$('#exhint').textContent=c.closed?'Exit recorded. This trade will be saved as closed.':'No exit yet. This trade will be saved as Open until you add one.'}}
+  if(t.dataset.qp&&draft){if(e.type==='change'&&t.value){draft.expiry=t.value;var ei=$('[data-f=expiry]');if(ei)ei.value=t.value;t.value=''}return}
+  if(t.dataset.f&&draft){draft[t.dataset.f]=t.value;if(t.dataset.f==='symbol'){var qp=$('#qp');if(qp)qp.innerHTML=quickPickOptions();updPlanLink()}if(t.dataset.f==='plan')updPlanLink();updRisk();if(t.dataset.rerender){if(t.dataset.f==='market'){draft.dir=DIRS[draft.market][0][0];draft.execs[0].side=entrySide(draft);draft.execs.forEach(function(x){x.fee=String(draft.market==='option'?state.settings.fee:0)})}else{draft.execs.forEach(function(x,i){if(i===0)x.side=entrySide(draft)})}if(e.type==='change')render()}else if(t.dataset.f==='dir'&&e.type==='change')render()}
+  else if(t.dataset.ex&&draft){var i=+t.closest('.ex').dataset.i;draft.execs[i][t.dataset.ex]=t.value;updRisk();if(t.dataset.ex==='side'||t.dataset.ex==='qty'){var c=calc({market:draft.market,dir:draft.dir,execs:draft.execs});$('#exhint').textContent=c.closed?'Exit recorded. This trade will be saved as closed.':'No exit yet. This trade will be saved as Open until you add one.'}}
   else if(t.dataset.cash&&cashDraft){cashDraft[t.dataset.cash]=t.value;var pv=$('#cprev');if(pv)pv.innerHTML=cashPreview()}
   else if(t.dataset.set==='fhKey'){state.settings.fhKey=t.value.trim();state.settings.earnFetched='';save()}
   else if(t.dataset.set){var v=parseFloat(t.value);if(v>=0){state.settings.fee=v;save()}}
@@ -1150,6 +1235,12 @@ function wlAplus(r){return r.dbl==='Yes'&&wlCanAt(r)&&r.at==='Yes'}
 function wlPick(r){return r.pickDate===today()?r.pick:''}
 function wlById(id){return(wl&&id&&wl.rows.find(function(x){return x.id===id}))||null}
 function wlCur(){return wlById(wlUI.sel)}
+/* Plan written on today's Watchlist for a symbol (only when it was set to Add today). */
+window.wlPlanFor=function(sym,onReady){
+  if(!wl){var p=wlEnsure();if(p&&onReady)p.then(function(){if(wl)onReady()});return null}
+  var r=wl.rows.find(function(x){return x.ticker===String(sym||'').trim().toUpperCase()});
+  return r&&wlPick(r)==='add'&&String(r.waiting||'').trim()?r.waiting.trim():null;
+};
 function wlDay(){var t=today();if(!wl.day||wl.day.date!==t)wl.day={date:t,news:'',newsNote:'',earn:'',earnNote:'',updatedAt:0};return wl.day}
 function wlList(){
   var t=today();

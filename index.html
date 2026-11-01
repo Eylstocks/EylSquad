@@ -34,6 +34,7 @@ main{padding:28px 32px 90px;width:100%}
 .tsrow{display:flex;justify-content:space-between;gap:12px;font-size:14px;padding:3px 0}.tsrow>span:last-child{text-align:right}
 .tsdiv{border-top:1px solid var(--line);margin:10px 0}
 .tsplan{font-size:14px;margin:4px 0 8px}
+.tsnote{text-align:right;margin:0 0 2px}
 .tsave{width:100%;margin-top:10px}
 @media (max-width:1180px){.formgrid{grid-template-columns:minmax(0,1fr)}.formside{position:static}}
 .btn{font:inherit;font-weight:500;font-size:14px;padding:8px 14px;border-radius:8px;border:1px solid var(--line2);background:var(--panel);color:var(--ink);cursor:pointer}
@@ -734,6 +735,7 @@ VIEWS.detail=function(){
   h+='<div class="panel" style="padding:18px 20px;margin-bottom:16px"><p class="big '+(c.result==='win'?'win':c.result==='loss'?'loss':'')+'">'+(c.closed?sMoney(c.net)+' <span style="font-size:16px;font-weight:500">'+(c.pct!=null?'('+(c.pct>0?'+':'')+c.pct.toFixed(2)+'%)':'')+'</span>':'Open')+'</p>'+(c.closed?'<p class="k">before fees</p>':'')+'<p class="k" style="margin:2px 0 4px">Stock price levels</p><div class="svgbox">'+ladder(t)+'</div></div>';
   h+='<div class="two"><div><h2>Risk and reward</h2><table class="rows">'+
     (t.market==='option'?'<tr><td>Max profit</td><td>'+(typeof r.maxP==='number'?money(r.maxP):esc(r.maxP))+'</td></tr><tr><td>Max loss</td><td>'+(typeof r.maxL==='number'?money(r.maxL):esc(r.maxL))+'</td></tr><tr><td>Breakeven</td><td>'+num(r.be)+'</td></tr><tr><td>Days to expiration at entry</td><td>'+(r.dte==null?'—':r.dte)+'</td></tr>':'<tr><td>Average entry</td><td>'+num(c.avgIn)+'</td></tr>')+
+    (function(){var rr=chartRR(t);return rr?'<tr><td>Risk/reward (chart)'+(rr.detail?'<br><span class="k">'+rr.detail+'</span>':'')+'</td><td>'+rrHtml(rr)+'</td></tr>':''})()+
     '<tr><td>Hold</td><td>'+fmtHold(c.holdSec)+'</td></tr><tr><td>P/L before fees</td><td>'+(c.closed?money(c.net):'—')+'</td></tr><tr><td>Fees</td><td>'+money(c.fees)+'</td></tr><tr><td>After fees</td><td>'+(c.closed?money(c.afterFees):'—')+'</td></tr></table></div>'+
     '<div><h2>Legs</h2><p style="font-size:14px;margin-bottom:8px">'+esc(typeLabel(t))+' · '+c.eq+(c.eq===1?' contract':' contracts')+(c.avgIn!=null?' · '+(c.entrySide==='sell'?'sold':'bought')+' at '+num(c.avgIn):'')+(c.avgOut!=null?', '+(c.entrySide==='sell'?'bought':'sold')+' at '+num(c.avgOut):'')+'</p><div class="svgbox narrow">'+execChart(c)+'</div></div></div>';
   h+='<div class="sec"><h2>Executions</h2><table class="rows">'+c.ex.map(function(x){return'<tr><td><span class="'+(x.side==='sell'?'loss':'win')+'">'+cap(x.side)+'</span> '+x.qty+' × '+num(x.price)+'</td><td>'+fmtDate(x.date)+' '+fmtTime(x.time)+' · fee '+money((+x.fee||0)*(+x.qty))+'</td></tr>'}).join('')+'</table></div>';
@@ -773,6 +775,18 @@ function expLabel(o){
   return(dte===0?'Today':DAYN[dow(o.d)]+' '+md(o.d))+' · '+dte+' DTE'+(note?' · '+note:'');
 }
 function quickPickOptions(){return'<option value="">Quick pick</option>'+expiries(draft&&draft.symbol).map(function(o){return'<option value="'+o.d+'">'+esc(expLabel(o))+'</option>'}).join('')}
+/* Risk/reward measured on the stock chart: entry, stop and target. Bullish positions target above entry. */
+function isBullish(dir){return dir==='long call'||dir==='short put'||dir==='long'}
+function chartRR(t){
+  var e=+t.stockIn,s=+t.stop,g=+t.target,bull=isBullish(t.dir);
+  if(!(e>0&&s>0&&g>0))return null;
+  var risk=bull?e-s:s-e,reward=bull?g-e:e-g,side=bull?'bullish':'bearish';
+  if(risk<=0)return{warn:'Stop is '+(bull?'above':'below')+' entry for a '+side+' trade'};
+  if(reward<=0)return{warn:'Target is '+(bull?'below':'above')+' entry for a '+side+' trade'};
+  var ratio=reward/risk;
+  return{ratio:ratio,cls:ratio>=2?'win':ratio<1?'loss':'',detail:'stop '+risk.toFixed(2)+' away ('+(risk/e*100).toFixed(1)+'%) · target '+reward.toFixed(2)+' away ('+(reward/e*100).toFixed(1)+'%)'};
+}
+function rrHtml(rr){return rr.warn?'<span class="loss">'+esc(rr.warn)+'</span>':'<b class="'+rr.cls+'">1 : '+rr.ratio.toFixed(1)+'</b>'}
 function riskData(d){
   var ex=d.execs.filter(function(x){return+x.qty>0&&x.price!==''&&+x.price>=0}),c=calc({market:d.market,dir:d.dir,execs:ex});
   if(!c.eq||c.avgIn==null)return null;
@@ -789,7 +803,6 @@ function riskData(d){
     r.maxL=risk;
     if(risk!=null)r.rows.push(['Risk to stop','<b class="loss">'+money(risk)+'</b>']);
     if(rew!=null)r.rows.push(['Reward to target','<b>'+money(rew)+'</b>']);
-    if(risk>0&&rew!=null)r.rows.push(['Risk/reward','<b>1 : '+(rew/risk).toFixed(1)+'</b>']);
   }
   var bal=currentBalance();
   if(r.maxL!=null&&isFinite(r.maxL)&&bal>0&&!hideAmt)r.rows.splice(1,0,['Share of balance','<b>'+pctFmt(r.maxL/bal*100)+'</b>']);
@@ -804,6 +817,9 @@ function tradeSummary(){
   h+=row('Symbol','<b>'+(sym?esc(sym):'—')+'</b>')+row('Position',esc(pos));
   if(isOpt)h+=row('Expiration',d.expiry?md(d.expiry)+' · '+daysBetween(nyNow().date,d.expiry)+' DTE':'—');
   h+='<div class="tsdiv"></div>'+(rd&&rd.rows.length?rd.rows.map(function(x){return row(x[0],x[1])}).join(''):'<p class="k">Risk appears once the strike, price and quantity are filled in.</p>');
+  var rr=chartRR(d);
+  if(rr)h+=row('Risk/reward (chart)',rrHtml(rr))+(rr.detail?'<p class="k tsnote">'+rr.detail.replace(' · ','<br>')+'</p>':'');
+  else if(+d.stockIn>0&&+d.stop>0)h+='<p class="k tsnote">Add a target to see risk/reward.</p>';
   if(plan&&plan!==d.plan.trim())h+='<div class="tsdiv"></div><p class="k">Watchlist plan</p><p class="tsplan">“'+esc(plan)+'”</p><button type="button" class="btn sm" data-act="usewlplan">Use this plan</button>';
   h+='<div class="tsdiv"></div>'+row('Saves as','<span class="pill '+(c.closed?'win':'open')+'">'+(c.closed?'Closed':'Open')+'</span>');
   h+='<button class="btn primary tsave" data-act="save">'+(editing?'Save changes':'Save trade')+'</button><button class="btn tsave" data-act="cancel">Cancel</button><p class="hint" style="text-align:center">Ctrl+Enter also saves</p></div>';

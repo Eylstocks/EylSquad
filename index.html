@@ -120,18 +120,14 @@ main{padding:18px 14px 80px}
 .strip5>div{padding:14px 18px;border-left:1px solid var(--line)}
 .strip5>div:first-child{border-left:0}
 .curvehead{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px}
-.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px;margin-bottom:14px}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(420px,100%),1fr));gap:14px;margin-bottom:14px}
 .card{padding:16px 18px}
 .card h2{margin-bottom:10px}
-.brow{display:grid;grid-template-columns:110px minmax(0,1fr) 76px 36px;gap:8px;align-items:center;font-size:13px;margin:7px 0}
+.brow-sep{text-align:center;margin:6px 0}
+.brow{display:grid;grid-template-columns:110px minmax(0,1fr) 76px 62px;gap:8px;align-items:center;font-size:13px;margin:7px 0}
 .trk{position:relative;height:10px}
 .trk:before{content:"";position:absolute;left:50%;top:-3px;bottom:-3px;width:1px;background:var(--line2)}
 .bar{position:absolute;top:0;height:10px;border-radius:3px}
-.heat{border-collapse:collapse;font-size:13px}
-.heat th{font-weight:500;color:var(--ink2);padding:4px 6px;text-align:center;font-size:12px}
-.heat td{padding:3px}
-.heat td span{display:block;text-align:center;border-radius:6px;padding:4px 6px;min-width:52px;line-height:1.25}
-.heat td small{display:block;font-size:11px}
 .cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr)) 96px;gap:6px}
 .dh{font-size:12px;color:var(--ink2);text-align:center;font-weight:500}
 .day{min-height:74px;padding:6px 8px;border-radius:8px;border:1px solid var(--line);background:var(--panel);text-align:left;font:inherit;font-size:12.5px;color:var(--ink2);cursor:pointer;display:block;width:100%}
@@ -145,7 +141,7 @@ main{padding:18px 14px 80px}
 @media (max-width:820px){
 .acct{grid-template-columns:repeat(3,minmax(0,1fr))}.acct .formula{grid-column:1/-1;text-align:left}
 .strip5{grid-template-columns:repeat(2,minmax(0,1fr))}.strip5>div:nth-child(odd){border-left:0}.strip5>div:nth-child(n+3){border-top:1px solid var(--line)}
-.cal{grid-template-columns:repeat(7,minmax(0,1fr)) 58px;gap:3px}.day{min-height:58px;padding:3px;font-size:10.5px;overflow:hidden}.day b{font-size:12px}.wk{padding:4px;font-size:10.5px;overflow:hidden}.day small{display:none}.brow{grid-template-columns:84px minmax(0,1fr) 70px 32px}
+.cal{grid-template-columns:repeat(7,minmax(0,1fr)) 58px;gap:3px}.day{min-height:58px;padding:3px;font-size:10.5px;overflow:hidden}.day b{font-size:12px}.wk{padding:4px;font-size:10.5px;overflow:hidden}.day small{display:none}.brow{grid-template-columns:84px minmax(0,1fr) 70px 58px}
 }
 
 /* Login overlay */
@@ -543,11 +539,14 @@ VIEWS.dashboard=function(){
 /* stats */
 var DAYN=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 function closedIn(){return sortedTrades().filter(function(x){return x.c.closed&&inPeriod(x.c)})}
-function groupBy(list,fn){var m={};list.forEach(function(x){var ks=fn(x);if(!Array.isArray(ks))ks=[ks];ks.forEach(function(k){if(k==null||k==='')return;var g=m[k]||(m[k]={k:k,n:0,net:0});g.n++;g.net+=x.c.net})});return Object.keys(m).map(function(k){return m[k]})}
+function groupBy(list,fn){var m={};list.forEach(function(x){var ks=fn(x);if(!Array.isArray(ks))ks=[ks];ks.forEach(function(k){if(k==null||k==='')return;var g=m[k]||(m[k]={k:k,n:0,w:0,net:0});g.n++;g.net+=x.c.net;if(x.c.net>0)g.w++})});return Object.keys(m).map(function(k){return m[k]})}
+function groupRows(groups,avg){return groups.map(function(g){return{label:g.k,val:avg?g.net/g.n:g.net,n:g.n,wr:g.w/g.n}})}
+function byVal(a,b){return b.val-a.val}
+function posType(t){return t.market==='option'?cap(t.dir):cap(t.dir)+' stock'}
 function barRows(rows){
   if(!rows.length)return'<p class="mut">Nothing to show yet.</p>';
-  var mx=Math.max.apply(null,rows.map(function(r){return Math.abs(r.val)}).concat([0.01]));
-  return rows.map(function(r){var pos=r.val>=0,w=Math.abs(r.val)/mx*48;return'<div class="brow"'+(r.n<5?' style="opacity:.55"':'')+'><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+esc(r.label)+'">'+esc(r.label)+'</span><div class="trk"><div class="bar" style="width:'+w+'%;'+(pos?'left:50%;background:var(--win)':'right:50%;background:var(--loss)')+'"></div></div><span class="'+(pos?'win':'loss')+'" style="text-align:right;font-weight:500">'+sMoney(r.val)+'</span><span class="k">n='+r.n+'</span></div>'}).join('');
+  var mx=Math.max.apply(null,rows.filter(function(r){return!r.sep}).map(function(r){return Math.abs(r.val)}).concat([0.01]));
+  return rows.map(function(r){if(r.sep)return'<p class="k brow-sep">'+r.sep+'</p>';var pos=r.val>=0,w=Math.abs(r.val)/mx*48;return'<div class="brow"'+(r.n<5?' style="opacity:.55"':'')+'><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+esc(r.label)+'">'+esc(r.label)+'</span><div class="trk"><div class="bar" style="width:'+w+'%;'+(pos?'left:50%;background:var(--win)':'right:50%;background:var(--loss)')+'"></div></div><span class="'+(pos?'win':'loss')+'" style="text-align:right;font-weight:500">'+sMoney(r.val)+'</span><span class="k" title="'+plural(r.n,'trade')+', '+Math.round(r.wr*100)+'% win rate">'+r.n+' · '+Math.round(r.wr*100)+'%</span></div>'}).join('');
 }
 function colChart(items){
   var mx=Math.max.apply(null,items.map(function(i){return Math.abs(i.val)}).concat([0.01])),W=items.length*56+8,s='<svg viewBox="0 0 '+W+' 132" style="max-width:'+Math.round(W*1.2)+'px" role="img" aria-label="PnL by group"><line x1="4" y1="50" x2="'+(W-4)+'" y2="50" stroke="var(--line2)"/>';
@@ -563,20 +562,22 @@ VIEWS.stats=function(){
   if(S.n<20&&!closedNotices.small)h+='<div class="callout"><span>Only '+S.n+' closed '+(S.n===1?'trade':'trades')+' so far. Treat these patterns as hints until you have about 20. Groups under 5 trades are dimmed.</span>'+dismissBtn('small')+'</div>';
   h+='<div class="panel strip"><div><p class="k">Profit factor</p><p class="big">'+(S.pf==null?'—':S.pf.toFixed(2))+'</p></div><div><p class="k">Expectancy per trade</p><p class="big '+(S.exp>=0?'win':'loss')+'">'+sMoney(S.exp)+'</p></div><div><p class="k">Avg win / avg loss</p><p class="big2" style="margin-top:2px;white-space:nowrap">'+(S.avgWin==null?'—':money(S.avgWin))+' / '+(S.avgLoss==null?'—':money(S.avgLoss))+'</p></div><div><p class="k">Max drawdown</p><p class="big '+(S.dd>0?'loss':'')+'">'+(S.dd>0?'-':'')+money(S.dd)+'</p></div><div title="Total commissions and fees on the closed trades in this period"><p class="k">Fees paid</p><p class="big '+(S.fees>0?'loss':'')+'">'+(S.fees>0?'-':'')+money(S.fees)+'</p><p class="k">P/L after fees '+sMoney(S.net-S.fees)+'</p></div></div>';
   var order={'Followed':0,'Off plan':1,'Not set':2};
-  var pg=groupBy(list,function(x){return x.t.followed===true?'Followed':x.t.followed===false?'Off plan':'Not set'}).map(function(g){return{label:g.k,val:g.net/g.n,n:g.n}}).sort(function(a,b){return order[a.label]-order[b.label]});
-  var emo=groupBy(list,function(x){return x.t.emotion}).map(function(g){return{label:g.k,val:g.net,n:g.n}}).sort(function(a,b){return b.val-a.val});
-  var set=groupBy(list,function(x){return x.t.setup}).map(function(g){return{label:g.k,val:g.net,n:g.n}}).sort(function(a,b){return b.val-a.val});
-  var mis=groupBy(list,function(x){return x.t.tags||[]}).map(function(g){return{label:g.k,val:g.net,n:g.n}}).sort(function(a,b){return a.val-b.val});
-  h+='<div class="cards"><div class="panel card"><h2>Plan followed or not</h2><p class="k" style="margin:-6px 0 8px">Average PnL per trade</p>'+barRows(pg)+'</div><div class="panel card"><h2>By emotion</h2><p class="k" style="margin:-6px 0 8px">Net PnL</p>'+barRows(emo)+'</div><div class="panel card"><h2>Cost of each mistake</h2><p class="k" style="margin:-6px 0 8px">Net PnL of trades with the tag</p>'+barRows(mis)+'</div><div class="panel card"><h2>By setup</h2><p class="k" style="margin:-6px 0 8px">Net PnL</p>'+barRows(set)+'</div></div>';
-  var cell={},rowsE=[],colsT=[];
-  list.forEach(function(x){var e=x.t.emotion;if(!e)return;(x.t.tags||[]).forEach(function(g){var k=e+'|'+g,c=cell[k]||(cell[k]={n:0,net:0});c.n++;c.net+=x.c.net;if(rowsE.indexOf(e)<0)rowsE.push(e);if(colsT.indexOf(g)<0)colsT.push(g)})});
-  var heat=rowsE.length?'<div class="tablewrap"><table class="heat"><tr><th></th>'+colsT.map(function(g){return'<th>'+esc(g)+'</th>'}).join('')+'</tr>'+rowsE.map(function(e){return'<tr><th style="text-align:left">'+esc(e)+'</th>'+colsT.map(function(g){var c=cell[e+'|'+g];return'<td>'+(c?'<span style="background:var(--'+(c.net<0?'lossbg':'winbg')+');color:var(--'+(c.net<0?'loss':'win')+')" title="'+esc(sMoney(c.net))+'">'+c.n+'<small>'+sMoney(c.net)+'</small></span>':'<span></span>')+'</td>'}).join('')+'</tr>'}).join('')+'</table></div>':'<p class="mut">Add an emotion and mistake tags to trades to see how they overlap.</p>';
+  var pg=groupRows(groupBy(list,function(x){return x.t.followed===true?'Followed':x.t.followed===false?'Off plan':'Not set'}),true).sort(function(a,b){return order[a.label]-order[b.label]});
+  var emo=groupRows(groupBy(list,function(x){return x.t.emotion})).sort(byVal);
+  var set=groupRows(groupBy(list,function(x){return x.t.setup})).sort(byVal);
+  var mis=groupRows(groupBy(list,function(x){return x.t.tags||[]})).sort(function(a,b){return a.val-b.val});
+  var tick=groupRows(groupBy(list,function(x){return x.t.symbol})).sort(byVal);
+  if(tick.length>12)tick=tick.slice(0,6).concat([{sep:'Best 6 above · worst 6 below · '+(tick.length-12)+' more in between'}],tick.slice(-6));
+  var pos=groupRows(groupBy(list,function(x){return posType(x.t)})).sort(byVal);
+  var sub='Net PnL · trades · win rate';
+  h+='<div class="cards"><div class="panel card"><h2>Plan followed or not</h2><p class="k" style="margin:-6px 0 8px">Average PnL per trade · trades · win rate</p>'+barRows(pg)+'</div><div class="panel card"><h2>By emotion</h2><p class="k" style="margin:-6px 0 8px">'+sub+'</p>'+barRows(emo)+'</div><div class="panel card"><h2>Cost of each mistake</h2><p class="k" style="margin:-6px 0 8px">Net PnL of trades with the tag · trades · win rate</p>'+barRows(mis)+'</div><div class="panel card"><h2>By setup</h2><p class="k" style="margin:-6px 0 8px">'+sub+'</p>'+barRows(set)+'</div></div>';
+  h+='<div class="cards"><div class="panel card"><h2>By ticker</h2><p class="k" style="margin:-6px 0 8px">'+sub+'</p>'+barRows(tick)+'</div><div class="panel card"><h2>By position type</h2><p class="k" style="margin:-6px 0 8px">'+sub+'</p>'+barRows(pos)+'</div></div>';
   var wdg=groupBy(list,function(x){return DAYN[new Date(x.c.openDate+'T12:00:00').getDay()]}),wmap={};wdg.forEach(function(g){wmap[g.k]=g});
   var wdays=['Mon','Tue','Wed','Thu','Fri'].concat(wmap.Sat?['Sat']:[]).concat(wmap.Sun?['Sun']:[]);
   var wd=wdays.map(function(d){return wmap[d]?{label:d,val:wmap[d].net,n:wmap[d].n}:{label:d,val:0,n:0}});
   var tdg=groupBy(list,function(x){return timeBucket(x.c.ex[0].time)}),tmap={};tdg.forEach(function(g){tmap[g.k]=g});
   var tb=['Pre','9:30','10','11','12–2','2–4','After'].filter(function(k){return tmap[k]||['9:30','10','11','12–2','2–4'].indexOf(k)>-1}).map(function(k){return tmap[k]?{label:k,val:tmap[k].net,n:tmap[k].n}:{label:k,val:0,n:0}});
-  h+='<div class="cards"><div class="panel card"><h2>Emotion and mistake overlap</h2><p class="k" style="margin:-6px 0 8px">Trades in each pair, with their net PnL</p>'+heat+'</div><div class="panel card"><h2>By weekday</h2><p class="k" style="margin:-6px 0 4px">Net PnL, by the day you entered</p><div class="svgbox narrow">'+colChart(wd)+'</div></div><div class="panel card"><h2>By time of day</h2><p class="k" style="margin:-6px 0 4px">Net PnL, by entry time in New York time</p><div class="svgbox narrow">'+colChart(tb)+'</div></div></div>';
+  h+='<div class="cards"><div class="panel card"><h2>By weekday</h2><p class="k" style="margin:-6px 0 4px">Net PnL, by the day you entered</p><div class="svgbox narrow">'+colChart(wd)+'</div></div><div class="panel card"><h2>By time of day</h2><p class="k" style="margin:-6px 0 4px">Net PnL, by entry time in New York time</p><div class="svgbox narrow">'+colChart(tb)+'</div></div></div>';
   return h;
 };
 

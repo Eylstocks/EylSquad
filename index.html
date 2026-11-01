@@ -223,6 +223,7 @@ main{padding:18px 14px 80px}
 .drop{cursor:pointer}
 .dt-gallery img{width:100%;height:190px;object-fit:cover;border-radius:8px;border:1px solid var(--line);cursor:zoom-in;background:var(--hover);display:block}
 @media (max-width:820px){.dt-two{grid-template-columns:1fr}}
+.exside{padding:8px 10px;font-size:14px;font-weight:600;border:1px solid var(--line);border-radius:6px;background:var(--hover)}
 .fbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 0 10px}
 .fbar input,.fbar select{width:auto;min-width:0;padding:6px 10px;font-size:13px}
 .fbar input{flex:1 1 180px;max-width:260px}
@@ -772,12 +773,12 @@ VIEWS.detail=function(){
 };
 /* form */
 function blankDraft(){var n=nyNow(),mk=state.settings.lastMarket||'option',dr=DIRS[mk].some(function(o){return o[0]===state.settings.lastDir})?state.settings.lastDir:DIRS[mk][0][0];return{id:null,symbol:'',market:mk,dir:dr,strike:'',expiry:'',stockIn:'',stop:'',target:'',stockOut:'',execs:[{id:uid(),side:/^short/.test(dr)?'sell':'buy',date:n.date,time:n.time,qty:'1',price:'',fee:String(mk==='option'?state.settings.fee:0)}],plan:'',planAt:'',planEditedAfterExit:false,followed:null,hindsight:'',setup:state.settings.lastSetup||'',emotion:'',tags:[],shots:[],shotRoles:{},_orig:[],kind:/call/.test(dr)?'call':'put'}}
-/* Long or short is read from the first fill: buy first = long, sell first = short. */
+/* Every trade opens with a buy (long calls, long puts, long stock); later fills are sells to close. */
 function firstFill(execs){return execs.slice().sort(function(a,b){return(a.date+a.time).localeCompare(b.date+b.time)})[0]}
 function syncDir(d){
-  var f=firstFill(d.execs),side=f?f.side:'buy';
-  if(d.market==='option'){d.kind=d.kind||(/call/.test(d.dir)?'call':'put');d.dir=(side==='sell'?'short ':'long ')+d.kind}
-  else d.dir=side==='sell'?'short':'long';
+  if(d.execs[0])d.execs[0].side='buy';
+  if(d.market==='option'){d.kind=d.kind||(/call/.test(d.dir)?'call':'put');d.dir='long '+d.kind}
+  else d.dir='long';
   return d;
 }
 function draftFrom(t){var d=JSON.parse(JSON.stringify(t));['strike','stockIn','stop','target','stockOut'].forEach(function(k){d[k]=t[k]===''||t[k]==null?'':String(t[k])});d.execs=d.execs.map(function(x){return Object.assign({},x,{qty:String(x.qty),price:String(x.price),fee:String(x.fee)})});d._orig=t.shots.slice();d._plan0=t.plan;d.kind=/call/.test(t.dir)?'call':'put';return syncDir(d)}
@@ -841,7 +842,7 @@ function riskData(d){
   return r;
 }
 function tradeSummary(){
-  var d=draft,editing=!!d.id,isOpt=d.market==='option',sym=d.symbol.trim().toUpperCase();
+  var d=syncDir(draft),editing=!!d.id,isOpt=d.market==='option',sym=d.symbol.trim().toUpperCase();
   var pos=cap(d.dir)+(isOpt&&+d.strike>0?' '+(+d.strike):''),rd=riskData(d),c=calc({market:d.market,dir:d.dir,execs:d.execs});
   var plan=window.wlPlanFor?window.wlPlanFor(d.symbol,updSummary):null;
   function row(k,v){return'<div class="tsrow"><span class="k">'+k+'</span><span>'+v+'</span></div>'}
@@ -868,7 +869,7 @@ function discardDraft(){dropDraftImages();draft=null;if(view.name==='form')rende
 window.addEventListener('beforeunload',function(e){if(draftDirty()){e.preventDefault();e.returnValue=''}});
 document.addEventListener('keydown',function(e){if(view.name==='form'&&e.key==='Enter'&&(e.ctrlKey||e.metaKey)){e.preventDefault();saveTrade()}});
 VIEWS.form=function(){
-  if(!draft)draft=freshDraft(blankDraft());var d=draft,editing=!!d.id,isOpt=d.market==='option',hasExit=d.execs.some(function(x){return x.side!==entrySide(d)});
+  if(!draft)draft=freshDraft(syncDir(blankDraft()));var d=draft,editing=!!d.id,isOpt=d.market==='option',hasExit=d.execs.some(function(x){return x.side!==entrySide(d)});
   var syms=Array.from(new Set(state.trades.map(function(t){return t.symbol})));
   var h='<div class="top"><div><h1>'+(editing?'Edit trade':'New trade')+'</h1><p class="sub">'+(editing?'Changes update every screen.':'Save the entry now. Add the exit when you get out.')+'</p></div>'+(!editing&&live().length?'<button class="btn sm" data-act="copylast">Copy last trade</button>':'')+'</div>';
   var head=h;h='';
@@ -888,7 +889,7 @@ VIEWS.form=function(){
 };
 function renderExecs(){
   var d=draft,el=$('#execs');if(!el)return;
-  el.innerHTML=d.execs.map(function(x,i){return'<div class="ex" data-i="'+i+'"><label class="f"><span>Side</span><select data-ex="side"><option value="sell"'+(x.side==='sell'?' selected':'')+'>Sell</option><option value="buy"'+(x.side==='buy'?' selected':'')+'>Buy</option></select></label><label class="f"><span>Date</span><input data-ex="date" type="date" value="'+esc(x.date)+'"></label><label class="f"><span>Time</span><input data-ex="time" type="time" step="1" value="'+esc(x.time)+'"></label><label class="f"><span>Qty</span><input data-ex="qty" type="number" min="1" step="any" inputmode="decimal" value="'+esc(x.qty)+'"></label><label class="f"><span>Price</span><input data-ex="price" type="number" step="any" inputmode="decimal" value="'+esc(x.price)+'"></label><label class="f"><span>Fee</span><input data-ex="fee" type="number" step="any" inputmode="decimal" value="'+esc(x.fee)+'"></label><button type="button" class="icon" data-act="rmex" data-i="'+i+'" aria-label="Remove execution"'+(d.execs.length<2?' hidden':'')+'>'+ICON.trash+'</button></div>'}).join('');
+  el.innerHTML=d.execs.map(function(x,i){return'<div class="ex" data-i="'+i+'"><label class="f"><span>Side</span>'+(i===0?'<div class="exside win">Buy</div>':'<select data-ex="side"><option value="sell"'+(x.side==='sell'?' selected':'')+'>Sell</option><option value="buy"'+(x.side==='buy'?' selected':'')+'>Buy</option></select>')+'</label><label class="f"><span>Date</span><input data-ex="date" type="date" value="'+esc(x.date)+'"></label><label class="f"><span>Time</span><input data-ex="time" type="time" step="1" value="'+esc(x.time)+'"></label><label class="f"><span>Qty</span><input data-ex="qty" type="number" min="1" step="any" inputmode="decimal" value="'+esc(x.qty)+'"></label><label class="f"><span>Price</span><input data-ex="price" type="number" step="any" inputmode="decimal" value="'+esc(x.price)+'"></label><label class="f"><span>Fee</span><input data-ex="fee" type="number" step="any" inputmode="decimal" value="'+esc(x.fee)+'"></label><button type="button" class="icon" data-act="rmex" data-i="'+i+'" aria-label="Remove execution"'+(d.execs.length<2?' hidden':'')+'>'+ICON.trash+'</button></div>'}).join('');
   updSummary();
 }
 function slotBox(role,id){
@@ -1055,11 +1056,11 @@ var ACT={
   undo:function(){var el=$('#toast');if(el._undo)el._undo();el.hidden=true},
   zoom:function(b){imgURL(b.dataset.img).then(function(u){if(!u)return;var lb=$('#lb');lb.innerHTML='<img alt="Screenshot" src="'+u+'">';lb.hidden=false})},
   save:saveTrade,cancel:cancelForm,
-  addex:function(){var n=nyNow(),d=draft,has=d.execs.some(function(x){return x.side!==entrySide(d)}),c=calc({market:d.market,dir:d.dir,execs:d.execs});d.execs.push({id:uid(),side:has?entrySide(d):(entrySide(d)==='sell'?'buy':'sell'),date:n.date,time:n.time,qty:String(c.eq||1),price:'',fee:String(state.settings.fee)});renderExecs()},
+  addex:function(){var n=nyNow(),d=draft,c=calc({market:d.market,dir:d.dir,execs:d.execs});d.execs.push({id:uid(),side:'sell',date:n.date,time:n.time,qty:String(Math.max(1,(c.eq||1)-(c.xq||0))),price:'',fee:String(state.settings.fee)});renderExecs()},
   rmex:function(b){draft.execs.splice(+b.dataset.i,1);renderExecs()},
   rmshot:function(b){draft.shots=draft.shots.filter(function(i){return i!==b.dataset.id});if(draft.shotRoles)delete draft.shotRoles[b.dataset.id];if((draft._orig||[]).indexOf(b.dataset.id)<0)delImg(b.dataset.id);renderShots()},
   togglehide:function(){hideAmt=!hideAmt;render()},
-  discarddraft:function(){dropDraftImages();draft=freshDraft(blankDraft());render();toast('Draft discarded')},
+  discarddraft:function(){dropDraftImages();draft=freshDraft(syncDir(blankDraft()));render();toast("Draft discarded")},
   usewlplan:function(){var p=window.wlPlanFor&&window.wlPlanFor(draft.symbol);if(!p)return;draft.plan=p;var ta=$('[data-f=plan]');if(ta)ta.value=p;updSummary()},
   tradenav:function(b){if(b.dataset.id)go('detail',{id:b.dataset.id,from:view.from})},
   copylast:function(){var l=sortedTrades()[0];if(!l)return;var t=l.t,d=blankDraft();d.symbol=t.symbol;d.market=t.market;d.dir=t.dir;d.strike=t.strike===''?'':String(t.strike);d.execs[0].side=entrySide(d);d.execs[0].qty=String(l.c.eq||1);d.setup=t.setup||d.setup;draft=d;render()},
@@ -1394,6 +1395,7 @@ function boot(){
     state.lists=Object.assign({setups:DEF_SETUPS.slice(),tags:DEF_TAGS.slice(),emotions:EMOTIONS.slice()},state.lists||{});
     var today=nyNow().date;
     state.purged=state.purged||{};
+    state.trades.forEach(function(t){var f=t.execs&&firstFill(t.execs);if(f&&f.side==='buy'&&/^short/.test(t.dir)){t.dir=t.dir.replace(/^short/,'long');t.updatedAt=Date.now()}});
     state.trades=state.trades.filter(function(t){if(t.deletedAt&&daysBetween(t.deletedAt,today)>30){t.shots.forEach(function(id){delImg(id)});state.purged[t.id]=Date.now();return false}return true});
     if(!storageOK)toast("This browser blocked storage. Your entries won't be kept after you close the page.");
     render();

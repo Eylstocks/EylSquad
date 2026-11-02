@@ -149,8 +149,15 @@ main{padding:18px 14px 80px}
 .bar{position:absolute;top:0;height:10px;border-radius:3px}
 .cal{display:grid;grid-template-columns:repeat(5,minmax(0,1fr)) 110px;gap:6px}
 .calhead{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px}
-.day .cearn,.day .cdst{display:block;font-size:11.5px;font-weight:500;color:var(--ink2);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.day .cdst{color:var(--warn)}
-.calnote{font-size:14px;margin-top:10px}
+.day .ctags{display:flex;gap:4px;margin-top:5px;flex-wrap:nowrap;overflow:hidden}
+.day .ctag{font-size:11.5px;font-weight:600;color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,transparent);border-radius:99px;padding:1px 8px;white-space:nowrap}
+.day .cmore{font-size:11.5px;font-weight:600;color:var(--muted);padding:1px 2px}
+.calmonth{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:20px}
+.cm-col{padding:16px 18px}.cm-col h2{margin-bottom:8px}
+.cm-row{display:grid;grid-template-columns:92px 1fr;gap:10px;padding:7px 6px;border-bottom:1px solid var(--line);font-size:14px;border-radius:6px}
+.cm-row:last-child{border-bottom:0}.cm-row.past{opacity:.5}.cm-row.click{cursor:pointer}.cm-row.click:hover{background:var(--hover)}
+.cm-date{color:var(--ink2)}.cm-empty{font-size:14px}
+@media (max-width:820px){.calmonth{grid-template-columns:1fr}}
 .day .damt{font-weight:600;color:var(--ink)}
 .day.hol{background:transparent;border-style:dashed;color:var(--muted);cursor:default}.day.hol b{color:var(--muted)}
 .dh{font-size:12px;color:var(--ink2);text-align:center;font-weight:500}
@@ -670,14 +677,25 @@ VIEWS.stats=function(){
 var cal={month:null,sel:null};
 /* New York UTC offset at midday on a date: -4 in daylight time, -5 in standard time */
 function nyOffset(d){var p=new Intl.DateTimeFormat('en-US',{timeZone:'America/New_York',timeZoneName:'shortOffset'}).formatToParts(new Date(d+'T17:00:00Z')).find(function(x){return x.type==='timeZoneName'});return p?parseInt(p.value.replace('GMT',''),10)||0:0}
-/* if the clocks change before the next trading day, describe it (shown on the last trading day before) */
-function wlDnMain(d){return DAYN[new Date(d+'T12:00:00').getDay()]+' '+md(d)}
-function clockChangeAfter(d){
-  var n=addDays(d,1);while(!isTradingDay(n))n=addDays(n,1);
-  var a=nyOffset(d),b=nyOffset(n);if(a===b)return null;
-  var x=addDays(d,1);while(nyOffset(x)===a)x=addDays(x,1);
-  return{day:x,ahead:b>a};
+function earnIcon(h){return h==='bmo'?' ☀':h==='amc'?' ☾':''}
+/* This month: watchlist earnings and market dates (closures, early closes, clock changes) */
+function monthPanel(mo,earn,now){
+  var y=+mo.slice(0,4),m=+mo.slice(5),last=mo+'-'+String(new Date(y,m,0).getDate()).padStart(2,'0'),er=[],mk=[];
+  for(var d=mo+'-01';d<=last;d=addDays(d,1)){
+    (earn[d]||[]).forEach(function(x){er.push({d:d,html:'<b>'+esc(x.t)+'</b>'+(x.h?earnIcon(x.h):' <span class="k">· time not set</span>')})});
+    if(WL_HOL[d])mk.push({d:d,act:1,html:'🏖 Closed · '+esc(WL_HOL[d])});
+    else if(WL_EARLY[d])mk.push({d:d,act:1,html:'⏰ Early close 1pm'});
+    var a=nyOffset(addDays(d,-1)),b=nyOffset(d);
+    if(a!==b)mk.push({d:d,html:'🕐 Clocks '+(b>a?'ahead':'back')+' 1 hour'});
+  }
+  function rows(list,empty,clickable){
+    if(!list.length)return'<p class="mut cm-empty">'+empty+'</p>';
+    return list.map(function(x){var past=x.d<now,click=clickable&&(x.act!==0)&&isTradingDayCal(x.d);
+      return'<div class="cm-row'+(past?' past':'')+(click?' click':'')+'"'+(click?' data-act="calday" data-d="'+x.d+'" tabindex="0"':'')+'><span class="cm-date">'+DAYN[new Date(x.d+'T12:00:00').getDay()]+' '+md(x.d)+'</span><span>'+x.html+'</span></div>'}).join('');
+  }
+  return'<div class="calmonth"><div class="panel cm-col"><h2>Earnings this month</h2>'+rows(er,'No watchlist earnings this month.',true)+'</div><div class="panel cm-col"><h2>Market calendar</h2>'+rows(mk,'Normal market hours all month.',true)+'</div></div>';
 }
+function isTradingDayCal(d){var w=new Date(d+'T12:00:00').getDay();return w>0&&w<6}
 function calTint(v,scale){
   if(!v)return'';
   var pct=Math.round(14+Math.min(1,Math.abs(v)/scale)*36);
@@ -732,21 +750,19 @@ VIEWS.calendar=function(){
       if(d.slice(0,7)!==mo){h+='<div class="day mu"></div>';continue}
       var e=cellData(d);wt+=e.net;wn+=e.n;
       if(WL_HOL[d]){h+='<div class="day hol" title="Market closed"><b>'+dn+'</b>Closed<small><br>'+esc(WL_HOL[d])+'</small></div>';continue}
-      var early=WL_EARLY[d]?' <span title="Early close 1pm · '+esc(WL_EARLY[d])+'">⏰</span>':'',extra='',el=earn[d]||[],cc=clockChangeAfter(d);
-      if(el.length)extra+='<span class="cearn">'+el.slice(0,2).map(function(x){return esc(x.t)+(x.h==='bmo'?' ☀':x.h==='amc'?' ☾':'')}).join(' · ')+(el.length>2?' +'+(el.length-2):'')+'</span>';
-      if(cc)extra+='<span class="cdst" title="Clocks change '+wlDnMain(cc.day)+' · New York moves 1 hour '+(cc.ahead?'ahead (daylight time)':'back (standard time)')+'">🕐 Clocks '+(cc.ahead?'+1h':'−1h')+' '+DAYN[new Date(cc.day+'T12:00:00').getDay()]+'</span>';
+      var early=WL_EARLY[d]?' <span title="Early close 1pm · '+esc(WL_EARLY[d])+'">⏰</span>':'',el=earn[d]||[];
+      var extra=el.length?'<span class="ctags">'+el.slice(0,2).map(function(x){return'<span class="ctag">'+esc(x.t)+earnIcon(x.h)+'</span>'}).join('')+(el.length>2?'<span class="cmore">+'+(el.length-2)+'</span>':'')+'</span>':'';
       h+='<button class="day'+(e.n?(e.net>0?' w':e.net<0?' l':''):'')+(d===sel?' sel':'')+(d===now?' today':'')+'" data-act="calday" data-d="'+d+'"'+(e.n?calTint(e.net,sc):'')+' aria-label="'+fmtDate(d)+(e.n?', '+sMoney(e.net)+', '+plural(e.n,'trade'):', no trades')+'"><b>'+dn+early+'</b>'+(e.n?'<span class="damt">'+sMoney(e.net)+'</span><small><br>'+plural(e.n,'trade')+(e.wkend?' · incl. weekend':'')+'</small>':'')+''+extra+'</button>';
     }
     h+='<div class="wk"><span class="k">Week '+(w++)+'</span>'+(wn?'<br><span class="'+plCls(wt)+'" style="font-weight:600">'+sMoney(wt)+'</span><br><span class="k">'+plural(wn,'trade')+'</span>':'')+'</div>';
   }
   h+='</div>';
-  var se=sel&&cellData(sel),sEarn=sel&&earn[sel],sClock=sel&&clockChangeAfter(sel);
+  var se=sel&&cellData(sel);
   h+='<div class="sec" style="margin-top:18px"><h2>'+(sel?longDate(sel)+(se&&se.n?' · '+plural(se.n,'trade')+' · net '+sMoney(se.net):' · no closed trades'):'Pick a day')+'</h2>';
   if(se&&se.n){h+='<div class="panel tablewrap"><table class="tbl"><tbody>'+se.list.map(function(x){var t=x.t,c=x.c;return'<tr data-open="'+t.id+'" tabindex="0"><td class="sym">'+esc(t.symbol)+'</td><td>'+esc(positionLabel(t))+'</td><td><span class="pill '+c.result+'">'+({win:'Win',loss:'Loss',even:'Even'})[c.result]+'</span></td><td>'+(t.followed===true?'<span class="win">Followed plan</span>':t.followed===false?'<span class="loss">Off plan</span>':'<span class="mut">Plan not set</span>')+'</td><td class="n '+plCls(c.net)+'">'+sMoney(c.net)+' <span class="mut">'+(c.pct!=null?(c.pct>0?'+':'')+c.pct.toFixed(2)+'%':'')+'</span></td></tr>'}).join('')+'</tbody></table></div>'}
   else h+='<p class="mut">Click a shaded day to see its trades.</p>';
-  if(sEarn&&sEarn.length)h+='<p class="calnote"><b>Earnings:</b> '+sEarn.map(function(x){return esc(x.t)+(x.h==='bmo'?' before open':x.h==='amc'?' after close':'')}).join(', ')+'</p>';
-  if(sClock)h+='<p class="calnote">🕐 <b>Clocks change '+wlDnMain(sClock.day)+'</b> · New York moves 1 hour '+(sClock.ahead?'ahead (daylight time)':'back (standard time)')+'</p>';
-  return h+'</div>';
+  h+='</div>';
+  return h+monthPanel(mo,earn,now);
 };
 /* trade detail */
 /* Before and After are the first two screenshots unless roles were set; the rest are More. */

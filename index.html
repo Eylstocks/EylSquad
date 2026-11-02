@@ -1515,7 +1515,21 @@ function wlTdays(a,b){var n=0,d=a;while(d<b){d=addDays(d,1);if(wlTrading(d))n++}
 function wlWeekEnd(){var d=today(),c=wlTrading(d)?1:0;while(c<5){d=addDays(d,1);if(wlTrading(d))c++}return d}
 function wlEarnWeek(){var t=today(),end=wlWeekEnd();return wl.rows.filter(function(r){return r.earnDate&&r.earnDate>=t&&r.earnDate<=end}).sort(function(a,b){return a.earnDate.localeCompare(b.earnDate)||(a.earnHour==='bmo'?-1:1)})}
 function wlDn(d){return DAYN[new Date(d+'T12:00:00').getDay()]+' '+md(d)}
-function wlMkt(){var out=[],d=today(),end=wlWeekEnd();while(d<=end){if(WL_HOL[d])out.push({c:1,t:'Market closed '+wlDn(d)+' · '+WL_HOL[d]});else if(WL_EARLY[d]&&wlTrading(d))out.push({c:0,t:'Early close 1pm '+wlDn(d)+' · '+WL_EARLY[d]});d=addDays(d,1)}return out}
+/* New York UTC offset at midday on a date, e.g. -4 in daylight time, -5 in standard time */
+function nyOffset(d){var p=new Intl.DateTimeFormat('en-US',{timeZone:'America/New_York',timeZoneName:'shortOffset'}).formatToParts(new Date(d+'T17:00:00Z')).find(function(x){return x.type==='timeZoneName'});return p?parseInt(p.value.replace('GMT',''),10)||0:0}
+/* market notices for the coming trading week: closures, early closes and clock changes */
+function wlMkt(){
+  var out=[],d=today(),end=wlWeekEnd(),prev=nyOffset(addDays(d,-1));
+  while(d<=end){
+    var off=nyOffset(d);
+    if(off!==prev)out.push({i:'🕐',t:'Clocks change '+wlDn(d)+' · New York moves 1 hour '+(off>prev?'ahead (daylight time)':'back (standard time)')+'; market hours stay 9:30–4:00 New York time'});
+    prev=off;
+    if(WL_HOL[d])out.push({c:1,i:'🏖',t:'Market closed '+wlDn(d)+' · '+WL_HOL[d]});
+    else if(WL_EARLY[d]&&wlTrading(d))out.push({c:0,i:'⏰',t:'Early close 1pm '+wlDn(d)+' · '+WL_EARLY[d]});
+    d=addDays(d,1);
+  }
+  return out;
+}
 function wlEarn(r){
   var t=today();if(!r.earnDate||r.earnDate<t)return null;
   var n=wlTdays(t,r.earnDate),eff=r.earnHour==='bmo'?Math.max(0,n-1):n;
@@ -1533,7 +1547,7 @@ function wlEarnTd(r){
 function wlEarnRow(){
   var list=wlEarnWeek(),d=wlDay(),mk=wlMkt();
   var h='<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:5px 0"><span style="min-width:150px;font-weight:500">Earnings this week</span><div class="wlew">'+(list.length?list.map(function(r){var e=wlEarn(r);return'<span class="pill '+(e&&e.cls?e.cls:'even')+'">'+esc(r.ticker+' '+wlEarnText(r))+'</span>'}).join(''):'<span class="mut" style="font-size:13px">None on your watchlist in the next 5 trading days</span>')+'</div><input data-wlday="earnNote" value="'+esc(d.earnNote||'')+'" placeholder="Other reports to watch, e.g. WMT Tue ☀" aria-label="Other earnings to watch" style="flex:1 1 220px;max-width:340px" autocomplete="off"></div>';
-  if(mk.length)h+='<div class="wlmk">'+mk.map(function(m){return(m.c?'🏖 <b class="loss">':'⏰ <b class="warn" style="color:var(--warn)">')+esc(m.t.split(' · ')[0])+'</b> · '+esc(m.t.split(' · ')[1])}).join(' &nbsp;·&nbsp; ')+'</div>';
+  if(mk.length)h+='<div class="wlmk">'+mk.map(function(m){return(m.c?'🏖 <b class="loss">':(m.i||'⏰')+' <b class="warn" style="color:var(--warn)">')+esc(m.t.split(' · ')[0])+'</b> · '+esc(m.t.split(' · ')[1])}).join(' &nbsp;·&nbsp; ')+'</div>';
   return h;
 }
 function wlEarnWeekText(){var l=wlEarnWeek().map(function(r){return r.ticker+' '+wlEarnText(r)}).join(', '),n=(wlDay().earnNote||'').trim(),m=wlMkt().map(function(x){return x.t}).join('; ');return[l||'None on watchlist',n?'Other: '+n:'',m].filter(Boolean).join(' · ')}
@@ -1925,7 +1939,7 @@ function wcTextParts(d){
   head.push('**News:** '+(day.news==='Yes'?'🔴 '+wcEsc(day.newsNote||'Yes'):day.news==='No'?'No major news':'Not checked'));
   var el=(day.earnList||[]).map(function(x){return wcEsc(x.t)}).join(' · ');
   head.push('**Earnings this week:** '+(el||'None on watchlist')+(day.earnNote?' · Other: '+wcEsc(day.earnNote):''));
-  (day.mkt||[]).forEach(function(m){head.push((m.c?'🏖 ':'⏰ ')+m.t)});
+  (day.mkt||[]).forEach(function(m){head.push((m.i||(m.c?'🏖':'⏰'))+' '+m.t)});
   if(!cards.length)blocks.push('No tickers on the list.');
   cards.forEach(function(c){
     var dot={up:'🟢 ',down:'🔴 ',rup:'🟡 ',rdown:'🟡 '}[c.dir]||'',res=wcRes(c.result),su=wcSetup(c).replace('DBL break','DBL');

@@ -29,7 +29,7 @@ p{margin:0}
 .navb svg{flex:0 0 20px;opacity:.85}
 .navb:hover{background:var(--hover)}
 .sidefoot{margin-top:auto;border-top:1px solid var(--line);padding:14px 8px 0}
-.plbtn{margin-top:auto;margin-bottom:8px}.plbtn+.sidefoot{margin-top:0}.plbtn svg{width:20px;height:20px}
+.sf-top{display:flex;align-items:center;gap:6px}.sf-top .sf-mail{flex:1;min-width:0}.sf-top .icon:hover{color:var(--ink)}
 .sf-mail{font-size:13px;font-weight:500;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sf-sync{font-size:12px;color:var(--muted);margin:2px 0 10px}
 .sf-act{display:flex;gap:6px}.sf-act .btn{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:6px 8px;white-space:nowrap;font-size:13px}
@@ -264,7 +264,6 @@ main{padding:18px 14px 80px}
     <button class="navb" data-go="watchlist"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg><span>Watchlist</span></button>
     <button class="navb" data-go="form"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg><span>New trade</span></button>
     <button class="navb" data-go="account"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg><span>Account</span></button>
-    <button class="navb plbtn" id="plbtn" data-act="togglepl"></button>
     <div class="sidefoot" id="sidefoot" hidden></div>
   </nav>
   <main id="main"></main>
@@ -410,14 +409,14 @@ function toast(msg,undo,label){var el=$('#toast');el.hidden=false;el.innerHTML='
 function go(name,params){view=Object.assign({name:name},params||{});render();window.scrollTo(0,0)}
 /* signed-in account, sync status, Sync now and Sign out at the bottom of the sidebar */
 function syncLabel(){var t=String(cloudText||'Not synced yet').replace(/^Cloud:\s*/,'');return t.charAt(0).toUpperCase()+t.slice(1)}
-function renderPLBtn(){var b=$('#plbtn');if(!b)return;var l=(hidePL?'Show':'Hide')+' P/L';b.setAttribute('aria-pressed',String(!hidePL));b.title=l;b.innerHTML=(hidePL?ICON.eyeoff:ICON.view)+'<span>'+l+'</span>'}
+function renderPLBtn(){var b=$('#plbtn');if(!b)return;var l=(hidePL?'Show':'Hide')+' P/L';b.setAttribute('aria-pressed',String(!hidePL));b.title=l;b.setAttribute('aria-label',l);b.innerHTML=hidePL?ICON.eyeoff:ICON.view}
 function renderSideFoot(){
   var el=$('#sidefoot'),u=window.auth&&window.auth.currentUser;if(!el)return;
   el.hidden=!u;if(!u){el.innerHTML='';el._u='';return}
   if(el._u===u.email){var a=$('#acsync');if(a)a.textContent=syncLabel();return}
   el._u=u.email;
-  el.innerHTML='<p class="sf-mail" title="'+esc(u.email||'')+'">'+esc(u.email||'')+'</p><p class="sf-sync" id="acsync">'+esc(syncLabel())+'</p>'+
-    '<div class="sf-act"><button class="btn sm" data-act="syncnow" title="Sync now">'+ICON.sync+'Sync now</button><button class="btn sm" data-act="signout" title="Sign out">'+ICON.out+'Sign out</button></div>';
+  el.innerHTML='<div class="sf-top"><p class="sf-mail" title="'+esc(u.email||'')+'">'+esc(u.email||'')+'</p><button class="icon" id="plbtn" data-act="togglepl"></button></div><p class="sf-sync" id="acsync">'+esc(syncLabel())+'</p>'+
+    '<div class="sf-act"><button class="btn sm" data-act="syncnow" title="Sync now">'+ICON.sync+'Sync now</button><button class="btn sm" data-act="signout" title="Sign out">'+ICON.out+'Sign out</button></div>';renderPLBtn();
 }
 function renderBrand(){
   var el=$('#brand'),logo=state&&state.brand&&state.brand.logo;if(!el||el.dataset.logo===(logo||''))return;

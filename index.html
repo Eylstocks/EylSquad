@@ -29,6 +29,7 @@ p{margin:0}
 .navb svg{flex:0 0 20px;opacity:.85}
 .navb:hover{background:var(--hover)}
 .sidefoot{margin-top:auto;border-top:1px solid var(--line);padding:14px 8px 0}
+.plbtn{margin-top:auto;margin-bottom:8px}.plbtn+.sidefoot{margin-top:0}.plbtn svg{width:20px;height:20px}
 .sf-mail{font-size:13px;font-weight:500;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sf-sync{font-size:12px;color:var(--muted);margin:2px 0 10px}
 .sf-act{display:flex;gap:6px}.sf-act .btn{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:6px 8px;white-space:nowrap;font-size:13px}
@@ -152,6 +153,7 @@ main{padding:18px 14px 80px}
 .day .ctags{display:flex;gap:5px;margin-top:4px;flex-wrap:nowrap;overflow:hidden}
 .day .ctag{font-size:11.5px;font-weight:500;color:var(--ink2);white-space:nowrap}
 .day .ctag+.ctag::before{content:'· ';color:var(--muted)}
+.calpct{font-weight:500}
 .day .cmore{font-size:11.5px;font-weight:600;color:var(--muted);padding:1px 2px}
 .calmonth{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:20px}
 .cm-col{padding:16px 18px}.cm-col h2{margin-bottom:8px}
@@ -262,6 +264,7 @@ main{padding:18px 14px 80px}
     <button class="navb" data-go="watchlist"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg><span>Watchlist</span></button>
     <button class="navb" data-go="form"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg><span>New trade</span></button>
     <button class="navb" data-go="account"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg><span>Account</span></button>
+    <button class="navb plbtn" id="plbtn" data-act="togglepl"></button>
     <div class="sidefoot" id="sidefoot" hidden></div>
   </nav>
   <main id="main"></main>
@@ -285,8 +288,14 @@ function addDays(d,n){var x=new Date(d+'T12:00:00');x.setDate(x.getDate()+n);ret
 function daysBetween(a,b){return Math.round((new Date(b+'T12:00:00')-new Date(a+'T12:00:00'))/86400000)}
 function fmtDate(d){if(!d)return'—';var p=d.split('-');return(+p[1])+'/'+(+p[2])+'/'+p[0]}
 function fmtTime(t){if(!t)return'';var p=t.split(':');var h=+p[0];return((h%12)||12)+':'+p[1]+(p[2]?':'+p[2]:'')+' '+(h<12?'AM':'PM')}
-function money(n,dp){if(n==null||isNaN(n))return'—';dp=dp==null?2:dp;return(n<0?'-':'')+'$'+Math.abs(n).toLocaleString('en-US',{minimumFractionDigits:dp,maximumFractionDigits:dp})}
-function sMoney(n){if(n==null||isNaN(n))return'—';return(n>0?'+':'')+money(n)}
+function rawMoney(n,dp){if(n==null||isNaN(n))return'—';dp=dp==null?2:dp;return(n<0?'-':'')+'$'+Math.abs(n).toLocaleString('en-US',{minimumFractionDigits:dp,maximumFractionDigits:dp})}
+function rawSMoney(n){if(n==null||isNaN(n))return'—';return(n>0?'+':'')+rawMoney(n)}
+/* The P/L eye in the sidebar masks trading amounts on every page except New trade. Copied images are not affected. */
+var hidePL=true,maskOn=false;
+function plMasked(){return maskOn&&hidePL}
+function money(n,dp){return plMasked()&&n!=null&&!isNaN(n)?'$•••••':rawMoney(n,dp)}
+function sMoney(n){return plMasked()&&n!=null&&!isNaN(n)?'$•••••':rawSMoney(n)}
+function plPct(x){return x==null||!isFinite(x)?'':plMasked()?'•••':(x>0?'+':'')+x.toFixed(2)+'%'}
 function num(n,dp){if(n===''||n==null||isNaN(n))return'—';return Number(n).toFixed(dp==null?2:dp)}
 function pctFmt(x){var t=(+x).toFixed(2).replace(/\.?0+$/,'');return t+'%'}
 function fmtHold(sec){if(sec<60)return sec+'s';var m=Math.floor(sec/60),s=sec%60;if(m<60)return m+'m'+(s?' '+s+'s':'');var h=Math.floor(m/60);m=m%60;if(h<24)return h+'h'+(m?' '+m+'m':'')+(s?' '+s+'s':'');var d=Math.floor(h/24);h=h%24;return d+'d'+(h?' '+h+'h':'')+(m?' '+m+'m':'')}
@@ -393,7 +402,7 @@ function delImg(id){
 /* ui helpers */
 /* Account amounts start hidden on every open; one switch covers every page. */
 var hideAmt=true;
-function bigAmt(v){return hideAmt?'$•••••':money(v)}
+function bigAmt(v){return hideAmt?'$•••••':rawMoney(v)}
 function eyeBtn(){var l=(hideAmt?'Show':'Hide')+' account amounts';return'<button class="icon eyebtn" data-act="togglehide" aria-pressed="'+!hideAmt+'" aria-label="'+l+'" title="'+l+'">'+(hideAmt?ICON.eyeoff:ICON.view)+'</button>'}
 var view={name:'dashboard'},draft=null,toastT=null,pendingRestore=null,downloads=null,armT=null;
 function $(s){return document.querySelector(s)}
@@ -401,6 +410,7 @@ function toast(msg,undo,label){var el=$('#toast');el.hidden=false;el.innerHTML='
 function go(name,params){view=Object.assign({name:name},params||{});render();window.scrollTo(0,0)}
 /* signed-in account, sync status, Sync now and Sign out at the bottom of the sidebar */
 function syncLabel(){var t=String(cloudText||'Not synced yet').replace(/^Cloud:\s*/,'');return t.charAt(0).toUpperCase()+t.slice(1)}
+function renderPLBtn(){var b=$('#plbtn');if(!b)return;var l=(hidePL?'Show':'Hide')+' P/L';b.setAttribute('aria-pressed',String(!hidePL));b.title=l;b.innerHTML=(hidePL?ICON.eyeoff:ICON.view)+'<span>'+l+'</span>'}
 function renderSideFoot(){
   var el=$('#sidefoot'),u=window.auth&&window.auth.currentUser;if(!el)return;
   el.hidden=!u;if(!u){el.innerHTML='';el._u='';return}
@@ -417,7 +427,7 @@ function renderBrand(){
 function render(){
   var cur=(view.name==='detail'||view.name==='deleted')?(view.from||'dashboard'):view.name;document.querySelectorAll('.navb').forEach(function(b){b.classList.toggle('on',b.dataset.go===cur)});
   renderBrand();renderSideFoot();$('#main').dataset.view=view.name;
-  $('#main').innerHTML=VIEWS[view.name]();hydrate();
+  maskOn=view.name!=='form';try{$('#main').innerHTML=VIEWS[view.name]()}finally{maskOn=false}renderPLBtn();hydrate();
   if(view.name==='form'){renderExecs();renderShots();updSummary()}
 }
 
@@ -427,7 +437,7 @@ function chartSvg(rows,msg,base0,mask){
   var pts=rows.map(function(r){return r.balance}),lo=Math.min.apply(null,base0?pts.concat([0]):pts),hi=Math.max.apply(null,base0?pts.concat([0]):pts),span=(hi-lo)||1;
   var W=1200,R=W-40,n=pts.length,X=function(i){return 40+i/(n-1)*(R-40)},Y=function(v){return 96-(v-lo)/span*74};
   var line=pts.map(function(v,i){return X(i).toFixed(1)+','+Y(v).toFixed(1)}).join(' ');
-  return'<svg viewBox="0 0 '+W+' 144" role="img" aria-label="Curve over time">'+(base0?'<line x1="40" y1="'+Y(0).toFixed(1)+'" x2="'+R+'" y2="'+Y(0).toFixed(1)+'" stroke="var(--line2)" stroke-dasharray="3 3"/>':'')+'<polyline points="'+line+'" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round"/>'+(n<=30?pts.map(function(v,i){return'<circle cx="'+X(i).toFixed(1)+'" cy="'+Y(v).toFixed(1)+'" r="3" fill="var(--accent)"/>'}).join(''):'')+''+(base0?'<text x="36" y="'+(Y(0)+4).toFixed(1)+'" text-anchor="end">$0</text>':'')+(mask?'':'<text x="40" y="12">High '+money(hi,2)+'</text>'+((base0?lo<0:hi>lo)?'<text x="40" y="'+Math.min(Y(lo)+16,121).toFixed(1)+'">Low '+money(lo,2)+'</text>':''))+'<text x="40" y="140">'+fmtDate(rows[0].date)+'</text><text x="'+R+'" y="140" text-anchor="end">'+fmtDate(rows[n-1].date)+'</text></svg>';
+  return'<svg viewBox="0 0 '+W+' 144" role="img" aria-label="Curve over time">'+(base0?'<line x1="40" y1="'+Y(0).toFixed(1)+'" x2="'+R+'" y2="'+Y(0).toFixed(1)+'" stroke="var(--line2)" stroke-dasharray="3 3"/>':'')+'<polyline points="'+line+'" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round"/>'+(n<=30?pts.map(function(v,i){return'<circle cx="'+X(i).toFixed(1)+'" cy="'+Y(v).toFixed(1)+'" r="3" fill="var(--accent)"/>'}).join(''):'')+''+(base0?'<text x="36" y="'+(Y(0)+4).toFixed(1)+'" text-anchor="end">$0</text>':'')+(mask?'':'<text x="40" y="12">High '+rawMoney(hi,2)+'</text>'+((base0?lo<0:hi>lo)?'<text x="40" y="'+Math.min(Y(lo)+16,121).toFixed(1)+'">Low '+rawMoney(lo,2)+'</text>':''))+'<text x="40" y="140">'+fmtDate(rows[0].date)+'</text><text x="'+R+'" y="140" text-anchor="end">'+fmtDate(rows[n-1].date)+'</text></svg>';
 }
 var PERIOD_DAYS={'30D':30,'90D':90,'180D':180};
 function inPeriod(c){
@@ -569,7 +579,7 @@ function tradeRow(x){
   var plan=!c.closed?'<span class="mut">—</span>':t.followed===true?'<span class="win">Yes</span>':t.followed===false?'<span class="loss">No</span>':'<span class="mut">Not set</span>';
   var tags=(t.tags||[]).slice(0,2).map(function(g){return'<span class="chip static">'+esc(g)+'</span>'}).join(' ')+((t.tags||[]).length>2?' <span class="mut">+'+(t.tags.length-2)+'</span>':'');
   return'<tr data-open="'+t.id+'" tabindex="0"><td class="sym">'+esc(t.symbol)+'</td><td><span class="pill '+c.result+'">'+({win:'Win',loss:'Loss',even:'Even',open:'Open'})[c.result]+'</span></td><td>'+esc(positionLabel(t))+'</td><td>'+(c.closed?holdShort(c.holdSec):'<span class="mut">—</span>')+'</td><td>'+plan+'</td><td>'+tags+'</td>'+
-    '<td class="n '+cls+'">'+(c.closed?sMoney(c.net):'—')+'</td><td class="n '+cls+'">'+(c.closed&&c.pct!=null?(c.pct>0?'+':'')+c.pct.toFixed(2)+'%':'—')+'</td>'+
+    '<td class="n '+cls+'">'+(c.closed?sMoney(c.net):'—')+'</td><td class="n '+cls+'">'+(c.closed&&c.pct!=null?plPct(c.pct):'—')+'</td>'+
     '<td style="text-align:right;white-space:nowrap"><button class="icon" data-act="view" data-id="'+t.id+'" aria-label="View trade" title="View">'+ICON.view+'</button><button class="icon" data-act="edit" data-id="'+t.id+'" aria-label="Edit trade" title="Edit">'+ICON.edit+'</button><button class="icon" data-act="del" data-id="'+t.id+'" aria-label="Delete trade" title="Delete">'+ICON.trash+'</button></td></tr>';
 }
 function tradeTable(rows){
@@ -603,12 +613,12 @@ VIEWS.dashboard=function(){
   h+=sessionStrip(all);
   h+=openTradesHtml(open,bal);
   var riskCell=open.length?openRiskCell(open,bal):'';
-  h+='<div class="grprow"><p class="grp">Account</p>'+eyeBtn()+'</div><div class="panel acct'+(open.length?' risk':'')+'"><div><p class="k">Balance</p><p class="big2">'+bigAmt(bal)+'</p></div><div><p class="k">Net deposited</p><p class="big2">'+bigAmt(dep)+'</p></div><div><p class="k">Return on deposits</p><p class="big2 '+(ret==null||hideAmt?'mut':ret>=0?'win':'loss')+'">'+(hideAmt?'•••••':ret==null?'—':(ret>0?'+':'')+ret.toFixed(2)+'%')+'</p></div>'+riskCell+(hideAmt?'':'<p class="formula">'+money(dep)+' deposited '+(allPnl<0?'−':'+')+' '+money(Math.abs(allPnl))+' trading − '+money(Math.abs(allFees))+' fees</p>')+'</div>';
+  h+='<div class="grprow"><p class="grp">Account</p>'+eyeBtn()+'</div><div class="panel acct'+(open.length?' risk':'')+'"><div><p class="k">Balance</p><p class="big2">'+bigAmt(bal)+'</p></div><div><p class="k">Net deposited</p><p class="big2">'+bigAmt(dep)+'</p></div><div><p class="k">Return on deposits</p><p class="big2 '+(ret==null||hideAmt?'mut':ret>=0?'win':'loss')+'">'+(hideAmt?'•••••':ret==null?'—':(ret>0?'+':'')+ret.toFixed(2)+'%')+'</p></div>'+riskCell+(hideAmt?'':'<p class="formula">'+rawMoney(dep)+' deposited '+(allPnl<0?'−':'+')+' '+money(Math.abs(allPnl))+' trading − '+money(Math.abs(allFees))+' fees</p>')+'</div>';
   h+='<p class="grp">Trading results · closed trades, before fees</p><div class="panel strip5"><div><p class="k">Trading P/L</p><p class="big '+(!S.n?'mut':S.net>0?'win':S.net<0?'loss':'')+'">'+(S.n?sMoney(S.net):'—')+'</p></div><div><p class="k">Win rate</p><p class="big '+(S.n?(S.winRate>=.5?'win':'loss'):'mut')+'">'+(S.n?pctFmt(S.winRate*100):'—')+'</p></div><div><p class="k">Profit factor</p><p class="big">'+(S.pf==null?'—':S.pf.toFixed(2))+'</p></div><div><p class="k">Avg win / avg loss</p><p class="big2" style="margin-top:2px;white-space:nowrap">'+(S.avgWin==null?'—':money(S.avgWin))+' / '+(S.avgLoss==null?'—':money(S.avgLoss))+'</p></div><div><p class="k">Followed plan</p><p class="big">'+(decided.length?pctFmt(fol/decided.length*100):'—')+'</p></div></div>';
   h+=costliestMistake(all);
   var crows=mode==='pnl'?pnlRows(closed):led,cend=crows.length?crows[crows.length-1].balance:null;
   var cval=cend==null?'':mode==='pnl'?'<b class="'+plCls(cend)+'">'+sMoney(cend)+'</b> trading P/L':'<b>'+bigAmt(cend)+'</b> balance';
-  h+='<div class="panel" style="padding:16px 18px;margin-bottom:16px"><div class="curvehead"><div class="seg" role="group" aria-label="Curve"><button class="chip'+(mode==='pnl'?' on':'')+'" data-act="curve" data-v="pnl">Trading PnL</button><button class="chip'+(mode==='balance'?' on':'')+'" data-act="curve" data-v="balance">Balance</button></div><span class="curveval">'+cval+' <span class="k">'+(mode==='pnl'?'before fees':'after fees')+'</span></span></div><div class="svgbox chartbox">'+chartSvg(crows,mode==='pnl'?'Close a trade to start your trading curve.':'Your balance curve shows up after your first deposit and trade.',mode==='pnl',mode==='balance'&&hideAmt)+'</div></div>';
+  h+='<div class="panel" style="padding:16px 18px;margin-bottom:16px"><div class="curvehead"><div class="seg" role="group" aria-label="Curve"><button class="chip'+(mode==='pnl'?' on':'')+'" data-act="curve" data-v="pnl">Trading PnL</button><button class="chip'+(mode==='balance'?' on':'')+'" data-act="curve" data-v="balance">Balance</button></div><span class="curveval">'+cval+' <span class="k">'+(mode==='pnl'?'before fees':'after fees')+'</span></span></div><div class="svgbox chartbox">'+chartSvg(crows,mode==='pnl'?'Close a trade to start your trading curve.':'Your balance curve shows up after your first deposit and trade.',mode==='pnl',mode==='balance'?hideAmt:hidePL)+'</div></div>';
   var tableRows=applyFilters(shown);
   if(!shown.length){h+='<div class="panel empty"><h2>Log your first trade</h2><p>Save the entry when you get in with your stop and a one-line plan. Add the exit later.</p><button class="btn primary" data-go="form">New trade</button></div>'}
   else{
@@ -640,7 +650,7 @@ function colChart(items){
   var mx=Math.max.apply(null,items.map(function(i){return Math.abs(i.val)}).concat([0.01])),W=640,B=78,MAXH=56,slot=(W-16)/items.length,bw=Math.min(52,slot*.5);
   var s='<svg viewBox="0 0 '+W+' 176" role="img" aria-label="PnL by group" style="font-size:14px"><line x1="4" y1="'+B+'" x2="'+(W-4)+'" y2="'+B+'" stroke="var(--line2)"/>';
   items.forEach(function(it,i){var h=Math.abs(it.val)/mx*MAXH,cx=8+slot*i+slot/2,pos=it.val>=0;
-    s+='<g'+(it.n<5?' opacity=".55"':'')+'>'+(it.n?'<rect x="'+(cx-bw/2)+'" y="'+(pos?B-h:B)+'" width="'+bw+'" height="'+Math.max(h,1)+'" rx="3" fill="'+(pos?'var(--win)':'var(--loss)')+'"/><text x="'+cx+'" y="'+(pos?B-h-7:B+h+17)+'" text-anchor="middle" style="fill:var(--ink);font-size:13px">'+(it.val>=0?'+':'-')+'$'+Math.abs(it.val).toFixed(2)+'</text>':'')+'<text x="'+cx+'" y="152" text-anchor="middle" style="font-size:14px">'+it.label+'</text><text x="'+cx+'" y="170" text-anchor="middle" style="fill:var(--muted);font-size:12px">n='+it.n+'</text></g>'});
+    s+='<g'+(it.n<5?' opacity=".55"':'')+'>'+(it.n?'<rect x="'+(cx-bw/2)+'" y="'+(pos?B-h:B)+'" width="'+bw+'" height="'+Math.max(h,1)+'" rx="3" fill="'+(pos?'var(--win)':'var(--loss)')+'"/><text x="'+cx+'" y="'+(pos?B-h-7:B+h+17)+'" text-anchor="middle" style="fill:var(--ink);font-size:13px">'+sMoney(it.val)+'</text>':'')+'<text x="'+cx+'" y="152" text-anchor="middle" style="font-size:14px">'+it.label+'</text><text x="'+cx+'" y="170" text-anchor="middle" style="fill:var(--muted);font-size:12px">n='+it.n+'</text></g>'});
   return s+'</svg>';
 }
 function timeBucket(t){return t<'09:30:00'?'Pre':t<'10:00:00'?'9:30':t<'11:00:00'?'10':t<'12:00:00'?'11':t<'14:00:00'?'12–2':t<'16:00:00'?'2–4':'After'}
@@ -719,6 +729,12 @@ function monthPicker(mo){
   });
   return h+'</optgroup></select>';
 }
+/* Return on the account for a period: P/L divided by the balance at the start plus money deposited during it */
+function periodPct(net,start,end){
+  var base=0;ledger().forEach(function(r){if(r.date<start)base+=r.amount;else if(r.date<=end&&r.cash)base+=r.amount});
+  return base>0?plPct(net/base*100):'';
+}
+function withPct(net,p){return sMoney(net)+(p&&!plMasked()?' <span class="calpct">('+p+')</span>':'')}
 function yearTotal(y){var l=sortedTrades().filter(function(x){return x.c.closed&&x.c.closeDate.slice(0,4)===String(y)});return l.length?sum(l,function(x){return x.c.net}):null}
 VIEWS.calendar=function(){
   var now=nyNow().date,mo=cal.month||now.slice(0,7),y=+mo.slice(0,4),m=+mo.slice(5),last=mo+'-'+String(new Date(y,m,0).getDate()).padStart(2,'0'),map={};
@@ -741,7 +757,7 @@ VIEWS.calendar=function(){
   var sel=cal.sel&&cal.sel.slice(0,7)===mo?cal.sel:lastDay,earn=window.wlEarningsByDate?window.wlEarningsByDate(function(){if(view.name==='calendar')render()}):{};
   var yt=yearTotal(y);
   var h='<div class="top"><div><h1>Calendar</h1><p class="sub">Trades count on the day they close · before fees</p></div></div>';
-  h+='<div class="calhead"><div style="display:flex;align-items:center;gap:8px"><button class="btn sm" data-act="calnav" data-d="-1" aria-label="Previous month">‹</button>'+monthPicker(mo)+'<button class="btn sm" data-act="calnav" data-d="1" aria-label="Next month">›</button><button class="btn sm" data-act="caltoday">Today</button><span class="k" style="margin-left:6px">'+y+' total: '+(yt==null?'—':'<b class="'+plCls(yt)+'">'+sMoney(yt)+'</b>')+'</span></div><p style="font-size:14px">'+(mN?'<span class="'+plCls(mNet)+'" style="font-weight:600">'+sMoney(mNet)+'</span> · '+plural(mN,'trade')+' · '+gd+' green, '+rd+' red days':'<span class="mut">No closed trades this month</span>')+'</p></div>';
+  h+='<div class="calhead"><div style="display:flex;align-items:center;gap:8px"><button class="btn sm" data-act="calnav" data-d="-1" aria-label="Previous month">‹</button>'+monthPicker(mo)+'<button class="btn sm" data-act="calnav" data-d="1" aria-label="Next month">›</button><button class="btn sm" data-act="caltoday">Today</button><span class="k" style="margin-left:6px">'+y+' total: '+(yt==null?'—':'<b class="'+plCls(yt)+'">'+withPct(yt,yt==null?'':periodPct(yt,y+'-01-01',y+'-12-31'))+'</b>')+'</span></div><p style="font-size:14px">'+(mN?'<span class="'+plCls(mNet)+'" style="font-weight:600">'+withPct(mNet,periodPct(mNet,first,last))+'</span> · '+plural(mN,'trade')+' · '+gd+' green, '+rd+' red days':'<span class="mut">No closed trades this month</span>')+'</p></div>';
   h+='<div class="cal">'+['Mon','Tue','Wed','Thu','Fri'].map(function(n){return'<div class="dh">'+n+'</div>'}).join('')+'<div class="dh">Week</div>';
   for(var w=1;wk<=last;wk=addDays(wk,7)){
     if(addDays(wk,4)<first)continue;
@@ -760,7 +776,7 @@ VIEWS.calendar=function(){
   h+='</div>';
   var se=sel&&cellData(sel);
   h+='<div class="sec" style="margin-top:18px"><h2>'+(sel?longDate(sel)+(se&&se.n?' · '+plural(se.n,'trade')+' · net '+sMoney(se.net):' · no closed trades'):'Pick a day')+'</h2>';
-  if(se&&se.n){h+='<div class="panel tablewrap"><table class="tbl"><tbody>'+se.list.map(function(x){var t=x.t,c=x.c;return'<tr data-open="'+t.id+'" tabindex="0"><td class="sym">'+esc(t.symbol)+'</td><td>'+esc(positionLabel(t))+'</td><td><span class="pill '+c.result+'">'+({win:'Win',loss:'Loss',even:'Even'})[c.result]+'</span></td><td>'+(t.followed===true?'<span class="win">Followed plan</span>':t.followed===false?'<span class="loss">Off plan</span>':'<span class="mut">Plan not set</span>')+'</td><td class="n '+plCls(c.net)+'">'+sMoney(c.net)+' <span class="mut">'+(c.pct!=null?(c.pct>0?'+':'')+c.pct.toFixed(2)+'%':'')+'</span></td></tr>'}).join('')+'</tbody></table></div>'}
+  if(se&&se.n){h+='<div class="panel tablewrap"><table class="tbl"><tbody>'+se.list.map(function(x){var t=x.t,c=x.c;return'<tr data-open="'+t.id+'" tabindex="0"><td class="sym">'+esc(t.symbol)+'</td><td>'+esc(positionLabel(t))+'</td><td><span class="pill '+c.result+'">'+({win:'Win',loss:'Loss',even:'Even'})[c.result]+'</span></td><td>'+(t.followed===true?'<span class="win">Followed plan</span>':t.followed===false?'<span class="loss">Off plan</span>':'<span class="mut">Plan not set</span>')+'</td><td class="n '+plCls(c.net)+'">'+sMoney(c.net)+(plMasked()?'':' <span class="mut">'+plPct(c.pct)+'</span>')+'</td></tr>'}).join('')+'</tbody></table></div>'}
   else h+='<p class="mut">Click a shaded day to see its trades.</p>';
   h+='</div>';
   return h+monthPanel(mo,earn,now);
@@ -785,7 +801,7 @@ VIEWS.detail=function(){
   var plCell=c.closed?'<p class="big2 '+plCls(c.net)+'">'+sMoney(c.net)+'</p><p class="k">before fees</p>':'<p class="big2 mut">Open</p>';
   h+='<div class="panel strip">'+
     '<div><p class="k">P/L</p>'+plCell+'</div>'+
-    '<div><p class="k">Return</p><p class="big2 '+(c.closed&&c.pct!=null?plCls(c.pct):'mut')+'">'+(c.closed&&c.pct!=null?(c.pct>0?'+':'')+c.pct.toFixed(2)+'%':'—')+'</p></div>'+
+    '<div><p class="k">Return</p><p class="big2 '+(c.closed&&c.pct!=null?plCls(c.pct):'mut')+'">'+(c.closed&&c.pct!=null?plPct(c.pct):'—')+'</p></div>'+
     '<div><p class="k">Hold</p><p class="big2">'+(c.closed?holdShort(c.holdSec):'—')+'</p></div>'+
     '<div><p class="k">Risk/reward (chart)</p><p class="big2">'+(rr?rrHtml(rr):'<span class="mut">—</span>')+'</p></div>'+
     '<div><p class="k">Followed plan</p><p class="big2 '+(t.followed===true?'win':t.followed===false?'loss':'mut')+'">'+(t.followed===true?'Yes':t.followed===false?'No':'—')+'</p></div></div>';
@@ -1020,7 +1036,7 @@ function ledgerSection(){
     if(f==='all'||(f==='cash')===(r.kind==='deposit'||r.kind==='withdraw'))g.rows.push(r);
   });
   var keys=Object.keys(months).sort().reverse().filter(function(m){return months[m].rows.length});
-  function part(label,v,cls,mask){return v?'<span>'+label+' <b class="'+(mask?'':cls)+'">'+(mask?'$•••••':sMoney(v))+'</b></span>':''}
+  function part(label,v,cls,mask){return v?'<span>'+label+' <b class="'+(mask?'':cls)+'">'+(mask?'$•••••':label==='Deposits'||label==='Withdrawals'?rawSMoney(v):sMoney(v))+'</b></span>':''}
   var h='<div class="sec"><div class="curvehead"><h2 style="margin:0">Ledger</h2><div class="seg" role="group" aria-label="Show">'+[['all','All'],['cash','Deposits and withdrawals'],['trades','Trades and fees']].map(function(o){return'<button class="chip'+(f===o[0]?' on':'')+'" data-act="acfilter" data-v="'+o[0]+'">'+o[1]+'</button>'}).join('')+'</div></div>';
   if(!keys.length)return h+'<p class="mut">No entries match this filter.</p></div>';
   h+='<div class="panel tablewrap"><table class="tbl"><thead><tr><th>Date</th><th>Entry</th><th class="n">Amount</th><th class="n">Balance</th><th></th></tr></thead><tbody>';
@@ -1029,7 +1045,7 @@ function ledgerSection(){
     h+='<tr class="mgh" data-act="acmonth" data-m="'+m+'" tabindex="0" aria-expanded="'+open+'"><td colspan="5"><div><span class="mgh-t">'+(open?'▾':'▸')+' '+monthName(m)+'</span><span class="mgh-s">'+part('Deposits',g.dep,'win',hideAmt)+part('Withdrawals',g.wd,'loss',hideAmt)+part('Trading',g.pl,plCls(g.pl))+part('Fees',g.fee,'loss')+'<span>Month-end balance <b>'+bigAmt(g.end)+'</b></span></span></div></td></tr>';
     if(!open)return;
     g.rows.slice().reverse().forEach(function(r){
-      h+='<tr><td>'+fmtDate(r.date)+'</td><td>'+esc(r.label)+(r.note?' <span class="mut">· '+esc(r.note)+'</span>':'')+'</td><td class="n '+(r.amount<0?'loss':'win')+'">'+(r.cash&&hideAmt?'$•••••':sMoney(r.amount))+'</td><td class="n">'+bigAmt(r.balance)+'</td><td style="text-align:right;white-space:nowrap">'+(r.cash?'<button class="icon" data-act="cashedit" data-id="'+r.cash.id+'" aria-label="Edit entry" title="Edit">'+ICON.edit+'</button><button class="icon" data-act="cashdel" data-id="'+r.cash.id+'" aria-label="Delete entry" title="Delete">'+ICON.trash+'</button>':'<button class="btn link" data-act="opentrade" data-id="'+r.id+'">View</button>')+'</td></tr>';
+      h+='<tr><td>'+fmtDate(r.date)+'</td><td>'+esc(r.label)+(r.note?' <span class="mut">· '+esc(r.note)+'</span>':'')+'</td><td class="n '+(r.amount<0?'loss':'win')+'">'+(r.cash?(hideAmt?'$•••••':rawSMoney(r.amount)):sMoney(r.amount))+'</td><td class="n">'+bigAmt(r.balance)+'</td><td style="text-align:right;white-space:nowrap">'+(r.cash?'<button class="icon" data-act="cashedit" data-id="'+r.cash.id+'" aria-label="Edit entry" title="Edit">'+ICON.edit+'</button><button class="icon" data-act="cashdel" data-id="'+r.cash.id+'" aria-label="Delete entry" title="Delete">'+ICON.trash+'</button>':'<button class="btn link" data-act="opentrade" data-id="'+r.id+'">View</button>')+'</td></tr>';
     });
   });
   return h+'</tbody></table></div></div>';
@@ -1093,6 +1109,7 @@ var ACT={
   rmex:function(b){draft.execs.splice(+b.dataset.i,1);renderExecs()},
   rmshot:function(b){draft.shots=draft.shots.filter(function(i){return i!==b.dataset.id});if(draft.shotRoles)delete draft.shotRoles[b.dataset.id];if((draft._orig||[]).indexOf(b.dataset.id)<0)delImg(b.dataset.id);renderShots()},
   togglehide:function(){hideAmt=!hideAmt;render()},
+  togglepl:function(){hidePL=!hidePL;render()},
   discarddraft:function(){dropDraftImages();draft=freshDraft(syncDir(blankDraft()));render();toast("Draft discarded")},
   usewlplan:function(){var p=window.wlPlanFor&&window.wlPlanFor(draft.symbol);if(!p)return;draft.plan=p;var ta=$('[data-f=plan]');if(ta)ta.value=p;updSummary()},
   tradenav:function(b){if(b.dataset.id)go('detail',{id:b.dataset.id,from:view.from})},

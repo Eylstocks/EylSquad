@@ -2052,7 +2052,7 @@ ACT.wlcopy=function(){
 };
 
 
-/* ---------- Copy image for one watchlist card (Setup wide on top, ☀ Before and ☾ After side by side) ---------- */
+/* ---------- Copy image for one watchlist card (☀ Before and ☾ After side by side, Setup wide below) ---------- */
 async function watchCardImage(c){
   await cardFonts();
   var res=wcRes(c.result),slots=[['SETUP',c.setup],['☀ BEFORE',c.pre],['☾ AFTER',c.post]].filter(function(x){return x[1]});
@@ -2063,8 +2063,8 @@ async function watchCardImage(c){
   cardFont(ctx,28,400,0);
   var noteLines=notes.map(function(n){return wrapLines(ctx,n[1],W-2*P).slice(0,3)});
   var notesH=notes.reduce(function(a,n,i){return a+40+noteLines[i].length*40+10},0);
-  /* rows: the setup chart gets a full-width row; before and after share the next one */
-  var top=slots[0]&&slots[0][0]==='SETUP'&&slots.length>1?[slots[0]]:null,rest=top?slots.slice(1):slots,rows=(top?[top]:[]).concat(rest.length>2?[rest.slice(0,2),rest.slice(2)]:rest.length?[rest]:[]);
+  /* rows: before and after side by side, then the setup chart full width under them */
+  var pair=slots.filter(function(x){return x[0]!=='SETUP'}),st=slots.filter(function(x){return x[0]==='SETUP'}),rows=(pair.length?[pair]:[]).concat(st.length?[st]:[]);
   rows=rows.map(function(r){var two=r.length===2,bw=two?(W-2*P-GAP)/2:W-2*P,bh=Math.min(two?560:(rows.length>1?620:820),Math.max.apply(null,r.map(function(x){return bw*x[2].height/x[2].width})));return{s:r,bw:bw,bh:bh}});
   var H=HEAD+56+notesH+rows.reduce(function(a,r){return a+44+r.bh+24},0)+P;
   cv.width=W;cv.height=H;cardBase(ctx,W,H,P+70,110);

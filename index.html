@@ -149,6 +149,8 @@ main{padding:18px 14px 80px}
 .bar{position:absolute;top:0;height:10px;border-radius:3px}
 .cal{display:grid;grid-template-columns:repeat(5,minmax(0,1fr)) 110px;gap:6px}
 .calhead{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.day .cearn,.day .cdst{display:block;font-size:11.5px;font-weight:500;color:var(--ink2);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.day .cdst{color:var(--warn)}
+.calnote{font-size:14px;margin-top:10px}
 .day .damt{font-weight:600;color:var(--ink)}
 .day.hol{background:transparent;border-style:dashed;color:var(--muted);cursor:default}.day.hol b{color:var(--muted)}
 .dh{font-size:12px;color:var(--ink2);text-align:center;font-weight:500}
@@ -666,6 +668,16 @@ VIEWS.stats=function(){
 
 /* calendar */
 var cal={month:null,sel:null};
+/* New York UTC offset at midday on a date: -4 in daylight time, -5 in standard time */
+function nyOffset(d){var p=new Intl.DateTimeFormat('en-US',{timeZone:'America/New_York',timeZoneName:'shortOffset'}).formatToParts(new Date(d+'T17:00:00Z')).find(function(x){return x.type==='timeZoneName'});return p?parseInt(p.value.replace('GMT',''),10)||0:0}
+/* if the clocks change before the next trading day, describe it (shown on the last trading day before) */
+function wlDnMain(d){return DAYN[new Date(d+'T12:00:00').getDay()]+' '+md(d)}
+function clockChangeAfter(d){
+  var n=addDays(d,1);while(!isTradingDay(n))n=addDays(n,1);
+  var a=nyOffset(d),b=nyOffset(n);if(a===b)return null;
+  var x=addDays(d,1);while(nyOffset(x)===a)x=addDays(x,1);
+  return{day:x,ahead:b>a};
+}
 function calTint(v,scale){
   if(!v)return'';
   var pct=Math.round(14+Math.min(1,Math.abs(v)/scale)*36);
@@ -707,7 +719,7 @@ VIEWS.calendar=function(){
   });
   function cellData(d){return cells[d]||{net:0,n:0,list:[],wkend:false}}
   var sc=calScale(Object.keys(map).map(function(d){return map[d].net})),first=mo+'-01',wk=addDays(first,-((new Date(first+'T12:00:00').getDay()+6)%7));
-  var sel=cal.sel&&cal.sel.slice(0,7)===mo?cal.sel:lastDay;
+  var sel=cal.sel&&cal.sel.slice(0,7)===mo?cal.sel:lastDay,earn=window.wlEarningsByDate?window.wlEarningsByDate(function(){if(view.name==='calendar')render()}):{};
   var yt=yearTotal(y);
   var h='<div class="top"><div><h1>Calendar</h1><p class="sub">Trades count on the day they close · before fees</p></div></div>';
   h+='<div class="calhead"><div style="display:flex;align-items:center;gap:8px"><button class="btn sm" data-act="calnav" data-d="-1" aria-label="Previous month">‹</button>'+monthPicker(mo)+'<button class="btn sm" data-act="calnav" data-d="1" aria-label="Next month">›</button><button class="btn sm" data-act="caltoday">Today</button><span class="k" style="margin-left:6px">'+y+' total: '+(yt==null?'—':'<b class="'+plCls(yt)+'">'+sMoney(yt)+'</b>')+'</span></div><p style="font-size:14px">'+(mN?'<span class="'+plCls(mNet)+'" style="font-weight:600">'+sMoney(mNet)+'</span> · '+plural(mN,'trade')+' · '+gd+' green, '+rd+' red days':'<span class="mut">No closed trades this month</span>')+'</p></div>';
@@ -720,16 +732,20 @@ VIEWS.calendar=function(){
       if(d.slice(0,7)!==mo){h+='<div class="day mu"></div>';continue}
       var e=cellData(d);wt+=e.net;wn+=e.n;
       if(WL_HOL[d]){h+='<div class="day hol" title="Market closed"><b>'+dn+'</b>Closed<small><br>'+esc(WL_HOL[d])+'</small></div>';continue}
-      var early=WL_EARLY[d]?' <span title="Early close 1pm · '+esc(WL_EARLY[d])+'">⏰</span>':'';
-      h+='<button class="day'+(e.n?(e.net>0?' w':e.net<0?' l':''):'')+(d===sel?' sel':'')+(d===now?' today':'')+'" data-act="calday" data-d="'+d+'"'+(e.n?calTint(e.net,sc):'')+' aria-label="'+fmtDate(d)+(e.n?', '+sMoney(e.net)+', '+plural(e.n,'trade'):', no trades')+'"><b>'+dn+early+'</b>'+(e.n?'<span class="damt">'+sMoney(e.net)+'</span><small><br>'+plural(e.n,'trade')+(e.wkend?' · incl. weekend':'')+'</small>':'')+'</button>';
+      var early=WL_EARLY[d]?' <span title="Early close 1pm · '+esc(WL_EARLY[d])+'">⏰</span>':'',extra='',el=earn[d]||[],cc=clockChangeAfter(d);
+      if(el.length)extra+='<span class="cearn">'+el.slice(0,2).map(function(x){return esc(x.t)+(x.h==='bmo'?' ☀':x.h==='amc'?' ☾':'')}).join(' · ')+(el.length>2?' +'+(el.length-2):'')+'</span>';
+      if(cc)extra+='<span class="cdst" title="Clocks change '+wlDnMain(cc.day)+' · New York moves 1 hour '+(cc.ahead?'ahead (daylight time)':'back (standard time)')+'">🕐 Clocks '+(cc.ahead?'+1h':'−1h')+' '+DAYN[new Date(cc.day+'T12:00:00').getDay()]+'</span>';
+      h+='<button class="day'+(e.n?(e.net>0?' w':e.net<0?' l':''):'')+(d===sel?' sel':'')+(d===now?' today':'')+'" data-act="calday" data-d="'+d+'"'+(e.n?calTint(e.net,sc):'')+' aria-label="'+fmtDate(d)+(e.n?', '+sMoney(e.net)+', '+plural(e.n,'trade'):', no trades')+'"><b>'+dn+early+'</b>'+(e.n?'<span class="damt">'+sMoney(e.net)+'</span><small><br>'+plural(e.n,'trade')+(e.wkend?' · incl. weekend':'')+'</small>':'')+''+extra+'</button>';
     }
     h+='<div class="wk"><span class="k">Week '+(w++)+'</span>'+(wn?'<br><span class="'+plCls(wt)+'" style="font-weight:600">'+sMoney(wt)+'</span><br><span class="k">'+plural(wn,'trade')+'</span>':'')+'</div>';
   }
   h+='</div>';
-  var se=sel&&cellData(sel);
+  var se=sel&&cellData(sel),sEarn=sel&&earn[sel],sClock=sel&&clockChangeAfter(sel);
   h+='<div class="sec" style="margin-top:18px"><h2>'+(sel?longDate(sel)+(se&&se.n?' · '+plural(se.n,'trade')+' · net '+sMoney(se.net):' · no closed trades'):'Pick a day')+'</h2>';
   if(se&&se.n){h+='<div class="panel tablewrap"><table class="tbl"><tbody>'+se.list.map(function(x){var t=x.t,c=x.c;return'<tr data-open="'+t.id+'" tabindex="0"><td class="sym">'+esc(t.symbol)+'</td><td>'+esc(positionLabel(t))+'</td><td><span class="pill '+c.result+'">'+({win:'Win',loss:'Loss',even:'Even'})[c.result]+'</span></td><td>'+(t.followed===true?'<span class="win">Followed plan</span>':t.followed===false?'<span class="loss">Off plan</span>':'<span class="mut">Plan not set</span>')+'</td><td class="n '+plCls(c.net)+'">'+sMoney(c.net)+' <span class="mut">'+(c.pct!=null?(c.pct>0?'+':'')+c.pct.toFixed(2)+'%':'')+'</span></td></tr>'}).join('')+'</tbody></table></div>'}
   else h+='<p class="mut">Click a shaded day to see its trades.</p>';
+  if(sEarn&&sEarn.length)h+='<p class="calnote"><b>Earnings:</b> '+sEarn.map(function(x){return esc(x.t)+(x.h==='bmo'?' before open':x.h==='amc'?' after close':'')}).join(', ')+'</p>';
+  if(sClock)h+='<p class="calnote">🕐 <b>Clocks change '+wlDnMain(sClock.day)+'</b> · New York moves 1 hour '+(sClock.ahead?'ahead (daylight time)':'back (standard time)')+'</p>';
   return h+'</div>';
 };
 /* trade detail */
@@ -1480,6 +1496,14 @@ function wlPick(r){return r.pickDate===today()?r.pick:''}
 function wlById(id){return(wl&&id&&wl.rows.find(function(x){return x.id===id}))||null}
 function wlCur(){return wlById(wlUI.sel)}
 /* Plan written on today's Watchlist for a symbol (only when it was set to Add today). */
+/* upcoming earnings of watchlist tickers, by date: {'2026-11-04':[{t:'NVDA',h:'amc'}]} */
+window.wlEarningsByDate=function(onReady){
+  if(!wl){var p=wlEnsure();if(p&&onReady)p.then(function(){if(wl)onReady()});return{}}
+  var t=today(),m={};
+  wl.rows.forEach(function(r){if(r.earnDate&&r.earnDate>=t)(m[r.earnDate]=m[r.earnDate]||[]).push({t:r.ticker,h:r.earnHour})});
+  Object.keys(m).forEach(function(d){m[d].sort(function(a,b){return a.t.localeCompare(b.t)})});
+  return m;
+};
 window.wlPlanFor=function(sym,onReady){
   if(!wl){var p=wlEnsure();if(p&&onReady)p.then(function(){if(wl)onReady()});return null}
   var r=wl.rows.find(function(x){return x.ticker===String(sym||'').trim().toUpperCase()});
@@ -1515,15 +1539,10 @@ function wlTdays(a,b){var n=0,d=a;while(d<b){d=addDays(d,1);if(wlTrading(d))n++}
 function wlWeekEnd(){var d=today(),c=wlTrading(d)?1:0;while(c<5){d=addDays(d,1);if(wlTrading(d))c++}return d}
 function wlEarnWeek(){var t=today(),end=wlWeekEnd();return wl.rows.filter(function(r){return r.earnDate&&r.earnDate>=t&&r.earnDate<=end}).sort(function(a,b){return a.earnDate.localeCompare(b.earnDate)||(a.earnHour==='bmo'?-1:1)})}
 function wlDn(d){return DAYN[new Date(d+'T12:00:00').getDay()]+' '+md(d)}
-/* New York UTC offset at midday on a date, e.g. -4 in daylight time, -5 in standard time */
-function nyOffset(d){var p=new Intl.DateTimeFormat('en-US',{timeZone:'America/New_York',timeZoneName:'shortOffset'}).formatToParts(new Date(d+'T17:00:00Z')).find(function(x){return x.type==='timeZoneName'});return p?parseInt(p.value.replace('GMT',''),10)||0:0}
-/* market notices for the coming trading week: closures, early closes and clock changes */
+/* market notices for the coming trading week: closures and early closes */
 function wlMkt(){
-  var out=[],d=today(),end=wlWeekEnd(),prev=nyOffset(addDays(d,-1));
+  var out=[],d=today(),end=wlWeekEnd();
   while(d<=end){
-    var off=nyOffset(d);
-    if(off!==prev)out.push({i:'🕐',t:'Clocks change '+wlDn(d)+' · New York moves 1 hour '+(off>prev?'ahead (daylight time)':'back (standard time)')+'; market hours stay 9:30–4:00 New York time'});
-    prev=off;
     if(WL_HOL[d])out.push({c:1,i:'🏖',t:'Market closed '+wlDn(d)+' · '+WL_HOL[d]});
     else if(WL_EARLY[d]&&wlTrading(d))out.push({c:0,i:'⏰',t:'Early close 1pm '+wlDn(d)+' · '+WL_EARLY[d]});
     d=addDays(d,1);

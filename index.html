@@ -783,7 +783,8 @@ VIEWS.calendar=function(){
 function tradeShots(t){
   var ids=(t.shots||[]).slice(),roles=t.shotRoles||{},has=ids.some(function(id){return roles[id]});
   var before=has?ids.find(function(id){return roles[id]==='before'})||'':ids[0]||'',after=has?ids.find(function(id){return roles[id]==='after'})||'':ids[1]||'';
-  return{before:before,after:after,more:ids.filter(function(id){return id!==before&&id!==after})};
+  var setup=ids.find(function(id){return roles[id]==='setup'})||'';
+  return{setup:setup,before:before,after:after,more:ids.filter(function(id){return id!==before&&id!==after&&id!==setup})};
 }
 function tradeNeighbours(id){var l=sortedTrades(),i=l.findIndex(function(x){return x.t.id===id});return{older:i>-1&&l[i+1]?l[i+1].t.id:null,newer:i>0?l[i-1].t.id:null}}
 function kv(k,v){return'<div class="kvrow"><span class="k">'+k+'</span><span>'+v+'</span></div>'}
@@ -812,7 +813,7 @@ VIEWS.detail=function(){
   if(chips)h+='<div class="seg" style="margin-bottom:18px">'+chips+'</div>';
   if(t.shots.length){
     var sh=tradeShots(t),fig=function(id,l){return'<figure class="dt-fig"><figcaption>'+l+'</figcaption><img data-img="'+id+'" data-act="zoom" alt="'+l+' chart"></figure>'};
-    h+='<h2>Screenshots</h2><div class="dt-gallery">'+(sh.before?fig(sh.before,'Before'):'')+(sh.after?fig(sh.after,'After'):'')+sh.more.map(function(id){return fig(id,'More')}).join('')+'</div>';
+    h+='<h2>Screenshots</h2><div class="dt-gallery">'+(sh.setup?'<figure class="dt-fig"><figcaption>Setup <button class="icon" data-act="rmsetup" data-id="'+t.id+'" aria-label="Remove setup chart" title="Remove setup chart" style="float:right;padding:0 2px;line-height:1">×</button></figcaption><img data-img="'+sh.setup+'" data-act="zoom" alt="Setup chart"></figure>':'')+(sh.before?fig(sh.before,'Before'):'')+(sh.after?fig(sh.after,'After'):'')+sh.more.map(function(id){return fig(id,'More')}).join('')+'</div>';
   }
   else if(t.shotsCleared)h+='<p class="hint">Screenshots were removed automatically after '+shotDays()+' days.</p>';
   return h;
@@ -924,7 +925,7 @@ VIEWS.form=function(){
   h+='<div class="sec"><div class="grid"><label class="f"><span>Symbol</span><input data-f="symbol" list="syms" value="'+esc(d.symbol)+'" autocomplete="off" placeholder="SPY" style="text-transform:uppercase"></label><label class="f"><span>Market</span><select data-f="market" data-rerender="1"><option value="option"'+(isOpt?' selected':'')+'>Option</option><option value="stock"'+(!isOpt?' selected':'')+'>Stock</option></select></label>'+(isOpt?'<label class="f"><span>Put / Call</span><select data-f="kind" data-rerender="1"><option value="put"'+(d.kind!=='call'?' selected':'')+'>Put</option><option value="call"'+(d.kind==='call'?' selected':'')+'>Call</option></select></label>':'')+(isOpt?'<label class="f"><span>Strike</span><input data-f="strike" type="number" step="any" inputmode="decimal" value="'+esc(d.strike)+'"></label><div class="f expf"><span>Expiration</span><div class="expwrap"><input data-f="expiry" type="date" value="'+esc(d.expiry)+'" aria-label="Expiration"><select id="qp" data-qp="1" aria-label="Quick pick expiration">'+quickPickOptions()+'</select></div></div>':'')+'</div><div class="grid" style="margin-top:12px"><label class="f"><span>Stock price at entry (optional)</span><input data-f="stockIn" type="number" step="any" inputmode="decimal" value="'+esc(d.stockIn)+'"></label><label class="f"><span>Stop (optional)</span><input data-f="stop" type="number" step="any" inputmode="decimal" value="'+esc(d.stop)+'"></label><label class="f"><span>Target (optional)</span><input data-f="target" type="number" step="any" inputmode="decimal" value="'+esc(d.target)+'"></label></div></div>';
   h+='<div class="sec"><h2>Executions <span class="mut" style="font-weight:400">· New York time · fee is per '+(isOpt?'contract':'share')+'</span></h2><div id="execs"></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn sm" data-act="addex">Add execution</button></div></div>';
   h+='<div class="sec"><label class="f"><span>Plan · why you\'re taking this trade</span><textarea data-f="plan" rows="2" placeholder="Needs a retest of demand before I buy the call">'+esc(d.plan)+'</textarea></label></div>';
-  h+='<details class="sec"'+(hasExit||editing?' open':'')+'><summary style="cursor:pointer;font-weight:600;font-size:15px;margin-bottom:12px">After the trade</summary><div class="grid" style="max-width:340px;margin-bottom:16px"><label class="f"><span>Stock price at exit</span><input data-f="stockOut" type="number" step="any" inputmode="decimal" value="'+esc(d.stockOut)+'"></label></div>'+
+  h+='<details class="sec"'+(hasExit||editing||d.wcKey?' open':'')+'><summary style="cursor:pointer;font-weight:600;font-size:15px;margin-bottom:12px">After the trade</summary><div class="grid" style="max-width:340px;margin-bottom:16px"><label class="f"><span>Stock price at exit</span><input data-f="stockOut" type="number" step="any" inputmode="decimal" value="'+esc(d.stockOut)+'"></label></div>'+
     '<p class="k" style="margin-bottom:6px">Followed plan</p><div class="seg" id="chips-followed"><button type="button" class="chip'+(d.followed===true?' on':'')+'" data-act="chip" data-kind="followed" data-v="yes" aria-pressed="'+(d.followed===true)+'">Yes</button><button type="button" class="chip bad'+(d.followed===false?' on':'')+'" data-act="chip" data-kind="followed" data-v="no" aria-pressed="'+(d.followed===false)+'">No</button></div><div id="breaker" hidden class="callout" style="margin-top:10px"><span>That tag usually means the plan wasn\'t followed. Mark Followed plan as No?</span><span><button type="button" class="btn sm" data-act="breakyes">Mark No</button> <button type="button" class="btn sm" data-act="breakno">Keep Yes</button></span></div>'+
     '<p class="k" style="margin:16px 0 6px">How you felt</p><div class="seg" id="chips-emotion">'+chipRow('emotion',state.lists.emotions,d.emotion)+'<input class="mini" data-add="emotions" placeholder="+ Add emotion" aria-label="Add an emotion"></div>'+
     '<p class="k" style="margin:16px 0 6px">Setup</p><div class="seg" id="chips-setup">'+chipRow('setup',state.lists.setups,d.setup)+'<input class="mini" data-add="setups" placeholder="+ Add setup" aria-label="Add a setup"></div>'+
@@ -947,12 +948,10 @@ function slotBox(role,id){
 function renderShots(){
   var el=$('#shots');if(!el)return;
   var sh=tradeShots(draft);
-  el.innerHTML='<div class="wcimgs">'+slotBox('before',sh.before)+slotBox('after',sh.after)+'</div>'+
-    '<p class="k" style="margin:12px 0 6px">More</p><div class="shots">'+sh.more.map(function(id){return'<div class="shot"><img data-img="'+id+'" data-act="zoom" alt="Screenshot"><button type="button" data-act="rmshot" data-id="'+id+'" aria-label="Remove screenshot">×</button></div>'}).join('')+'</div>'+
-    '<div class="drop" data-act="shotmore">'+(draft._tgt?'Pasting into <b>'+cap(draft._tgt)+'</b>. Click here to paste into More instead.':'Paste with Ctrl+V, drag images here, or <label style="color:var(--accent);cursor:pointer;text-decoration:underline">choose files<input type="file" accept="image/*" multiple data-act="pick" style="display:none"></label>')+'</div>';
+  el.innerHTML='<div class="wcimgs">'+slotBox('before',sh.before)+slotBox('after',sh.after)+'</div>'+(sh.setup?'<p class="hint" style="margin-top:8px">Setup chart from the watchlist is attached.</p>':'');
   hydrate();
 }
-/* a new image goes into the selected slot (replacing what was there), otherwise into More */
+/* a new image goes into the selected slot (replacing what was there), otherwise into the first empty one */
 function placeShot(id,role){
   var sh=tradeShots(draft);draft.shotRoles=draft.shotRoles||{};
   if(!Object.keys(draft.shotRoles).length){if(sh.before)draft.shotRoles[sh.before]='before';if(sh.after)draft.shotRoles[sh.after]='after'}
@@ -961,8 +960,9 @@ function placeShot(id,role){
 }
 function addFiles(files,role){
   if(view.name!=='form'||!draft)return;
-  role=role||draft._tgt||null;
-  var list=Array.from(files).filter(function(f){return/^image\//.test(f.type)});if(role)list=list.slice(0,1);
+  var sh0=tradeShots(draft);role=role||draft._tgt||(!sh0.before?'before':!sh0.after?'after':null);
+  if(!role){toast('Click Before or After first to replace that chart');return}
+  var list=Array.from(files).filter(function(f){return/^image\//.test(f.type)}).slice(0,1);
   var jobs=list.map(function(f){return compress(f).then(function(b){var id='i'+uid();return dbPut('img',id,b).then(function(){placeShot(id,role)})}).catch(function(){toast("Couldn't add that image")})});
   Promise.all(jobs).then(function(){draft._tgt=null;renderShots()});
 }
@@ -979,7 +979,7 @@ function saveTrade(){
   var prev=d.id?state.trades.find(function(t){return t.id===d.id}):null,now=nyNow();
   var t={id:d.id||uid(),symbol:d.symbol.trim().toUpperCase(),market:d.market,dir:d.dir,strike:d.market==='option'?+d.strike:'',expiry:d.market==='option'?d.expiry:'',stockIn:+d.stockIn,stop:+d.stop,target:+d.target>0?+d.target:'',stockOut:+d.stockOut>0?+d.stockOut:'',
     execs:d.execs.map(function(x){return{id:x.id,side:x.side,date:x.date,time:x.time.length===5?x.time+':00':x.time,qty:+x.qty,price:+x.price,fee:+x.fee||0}}),
-    plan:d.plan,planAt:d.planAt,planEditedAfterExit:d.planEditedAfterExit,followed:d.followed,hindsight:d.hindsight,setup:d.setup,emotion:d.emotion,tags:d.tags.slice(),shots:d.shots.slice(),shotRoles:Object.assign({},d.shotRoles||{}),deletedAt:null};
+    plan:d.plan,planAt:d.planAt,planEditedAfterExit:d.planEditedAfterExit,followed:d.followed,hindsight:d.hindsight,setup:d.setup,emotion:d.emotion,tags:d.tags.slice(),shots:d.shots.slice(),shotRoles:Object.assign({},d.shotRoles||{}),wcKey:d.wcKey||'',deletedAt:null};
   t.updatedAt=Date.now();
   if(!prev||prev.plan!==t.plan){t.planAt=now.date+' '+now.time;if(prev&&prev.plan.trim()&&calc(prev).closed)t.planEditedAfterExit=true}
   if(!t.plan.trim()){t.planAt='';t.planEditedAfterExit=false}
@@ -1123,7 +1123,6 @@ var ACT={
   breakyes:function(){draft.followed=false;$('#breaker').hidden=true;document.querySelectorAll('#main [data-kind="followed"]').forEach(function(x){var on=x.dataset.v==='no';x.classList.toggle('on',on);x.setAttribute('aria-pressed',on)})},
   breakno:function(){$('#breaker').hidden=true},
   pick:function(b){addFiles(b.files,b.dataset.slot||null);b.value=''},
-  shotmore:function(){if(draft._tgt){draft._tgt=null;renderShots()}},
   shotslot:function(b){draft._tgt=draft._tgt===b.dataset.slot?null:b.dataset.slot;renderShots()},
   pickslot:function(b){draft._tgt=b.closest('.tsbox').dataset.slot;var i=b.querySelector('input');if(i)i.click()},
   cashtype:function(b){cashDraft.type=b.dataset.v;render()},
@@ -1135,7 +1134,13 @@ var ACT={
   cashcancel:function(){cashDraft=null;render()},
   cashedit:function(b){var x=state.cash.find(function(c){return c.id===b.dataset.id});cashDraft={id:x.id,type:x.type,date:x.date,amount:String(x.amount),note:x.note||''};render();window.scrollTo(0,0)},
   cashdel:function(b){var i=state.cash.findIndex(function(c){return c.id===b.dataset.id}),x=state.cash.splice(i,1)[0];state.purged[x.id]=Date.now();save();render();toast('Entry deleted',function(){delete state.purged[x.id];x.updatedAt=Date.now();state.cash.splice(i,0,x);save();render()})},
-  opentrade:function(b){go('detail',{id:b.dataset.id,from:'account'})},
+  opentrade:function(b){go('detail',{id:b.dataset.id,from:b.dataset.from||'account'})},
+  rmsetup:function(b){
+    var t=state.trades.find(function(x){return x.id===b.dataset.id});if(!t)return;var id=tradeShots(t).setup;if(!id)return;
+    var at=t.shots.indexOf(id);t.shots.splice(at,1);delete t.shotRoles[id];t.updatedAt=Date.now();save();render();
+    toast('Setup chart removed',function(){t.shots.splice(at,0,id);t.shotRoles[id]='setup';t.updatedAt=Date.now();save();render()});
+    setTimeout(function(){if(t.shots.indexOf(id)<0)delImg(id)},9000);
+  },
   csv:doCsv,
   shrinkimgs:function(){shrinkAllImages()},
   restorefile:function(b){var f=b.files[0];b.value='';if(!f)return;f.text().then(function(txt){var j=JSON.parse(txt);if(j.app!=='trade-journal'||!j.state||!Array.isArray(j.state.trades))throw 0;pendingRestore=j;render()}).catch(function(){toast("That file isn't a journal backup")})},
@@ -1219,7 +1224,7 @@ async function shareCard(t){
 async function privateRecord(t){
   await cardFonts();
   var r=tradeResult(t),c=r.c,sh=tradeShots(t),isOpt=t.market==='option',rr=chartRR(t);
-  var slots=[['BEFORE',sh.before],['AFTER',sh.after]].filter(function(x){return x[1]}).concat(sh.more.map(function(id){return['MORE',id]}));
+  var slots=[['SETUP',sh.setup],['BEFORE',sh.before],['AFTER',sh.after]].filter(function(x){return x[1]}).concat(sh.more.map(function(id){return['MORE',id]}));
   var logo=await imgEl(state.brand&&state.brand.logo),imgs=await shotEls(slots.map(function(x){return x[1]}));
   slots=slots.filter(function(x,i){x[2]=imgs[i];return imgs[i]});
   var W=1200,P=64,LW=210,VW=W-2*P-LW;
@@ -1338,7 +1343,7 @@ document.addEventListener('paste',function(e){
   if(files.length){e.preventDefault();addFiles(files)}
 });
 document.addEventListener('dragover',function(e){if(view.name==='form')e.preventDefault()});
-document.addEventListener('drop',function(e){if(view.name!=='form')return;e.preventDefault();if(e.dataTransfer&&e.dataTransfer.files)addFiles(e.dataTransfer.files)});
+document.addEventListener('drop',function(e){if(view.name!=='form')return;e.preventDefault();var box=e.target.closest&&e.target.closest('.tsbox');if(e.dataTransfer&&e.dataTransfer.files)addFiles(e.dataTransfer.files,box?box.dataset.slot:null)});
 
 /* cloud sync */
 var syncBusy=false,syncAgain=false;
@@ -1478,7 +1483,7 @@ document.head.insertAdjacentHTML('beforeend','<style>'+
 '.wlci{font-size:13px;color:var(--line2);margin-left:3px}.wlci.on{color:var(--accent)}'+
 '.wcards{display:grid;gap:12px;margin-top:10px}.wcard{padding:14px 16px}.wcard.wlA{box-shadow:inset 3px 0 0 var(--win)}'+
 '.wch{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px}'+
-'.wcimgs{display:grid;grid-template-columns:1fr 1fr;gap:10px}'+
+'.wcimgs{display:grid;grid-template-columns:1fr 1fr;gap:10px}.wcimgs.wc3{grid-template-columns:1fr 1fr 1fr}'+
 '.wcbox{position:relative;border:1px dashed var(--line2);border-radius:8px;min-height:150px;display:flex;flex-direction:column;cursor:pointer;background:var(--field);overflow:hidden}'+
 '.wcbox.has{border-style:solid}.wcbox.on{border:2px solid var(--accent)}'+
 '.wcbl{font-size:12px;font-weight:600;color:var(--ink2);padding:6px 10px}'+
@@ -1491,7 +1496,7 @@ document.head.insertAdjacentHTML('beforeend','<style>'+
 '.wcplan{padding:8px 0;font-size:14px;color:var(--ink)}'+
 '.wlhist{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:40;display:flex;justify-content:flex-end}'+
 '.wlhp{background:var(--bg);width:min(920px,100%);height:100%;overflow:auto;padding:22px}'+
-'@media (max-width:820px){.wcimgs{grid-template-columns:1fr}}'+
+'@media (max-width:820px){.wcimgs,.wcimgs.wc3{grid-template-columns:1fr}}'+
 '.wlew{display:flex;gap:6px;flex-wrap:wrap;align-items:center}.wlmk{font-size:13px;color:var(--ink2);padding:2px 0 4px 160px}'+
 '@media (max-width:820px){.wlmk{padding-left:0}}'+
 '</style>');
@@ -1851,7 +1856,7 @@ ACT.restoreyes=function(){
   var p=pendingRestore,w=p&&p.watchlist;
   if(p&&p.wcards&&p.wcards.cards){Object.keys(p.wcards.cards).forEach(function(k){var c=p.wcards.cards[k];if(!wc.cards[k])wc.cards[k]=c})}
   Object.keys(p&&p.wcards&&p.wcards.days||{}).forEach(function(d){if(!wc.days[d])wc.days[d]=p.wcards.days[d]});
-  wcAll().forEach(function(c){c.pre='';c.post=''});wcSave();
+  wcAll().forEach(function(c){c.pre='';c.post='';c.setup=''});wcSave();
   if(w&&Array.isArray(w.rows)){var now=Date.now();wl=wlFromSaved(w);wl.rows.forEach(function(r){r.updatedAt=now});if(wl.day)wl.day.updatedAt=now;wlReady=Promise.resolve();wlPersist()}
   wlOrigRestore();
 };
@@ -1862,6 +1867,7 @@ function wlLongDate(d){var p=d.split('-');return wlDayName(d)+' '+(+p[1])+'/'+(+
 var wc={cards:{},days:{},cleaned:''},wcT=null;
 /* Missed: the setup worked but the trade was not taken. It counts as a working plan. */
 var WC_RES=[['worked','✓ Worked','win'],['missed','🎯 Missed','accent'],['failed','✗ Failed','loss'],['notyet','⏳ Not yet','warn'],['none','— Didn\'t trigger','even']];
+var WC_SLOTS={setup:'Setup · zoomed out',pre:'☀ Before',post:'☾ After'};
 function wcRes(v){return WC_RES.find(function(x){return x[0]===v})||null}
 function wcKey(d,t){return d+'|'+t}
 function wcSave(){clearTimeout(wcT);wcT=setTimeout(function(){dbPut('kv','wlcards',JSON.parse(JSON.stringify(wc))).catch(function(){})},300)}
@@ -1870,7 +1876,7 @@ function wcLoad(){return dbGet('kv','wlcards').then(function(s){if(s&&s.cards){w
 function wcClean(){
   var t=today();if(wc.cleaned===t)return;
   var cut=addDays(t,-14);
-  Object.keys(wc.cards).forEach(function(k){var c=wc.cards[k];if(c.date>=cut)return;['pre','post'].forEach(function(s){if(!c[s])return;dbDel('img',c[s]).catch(function(){});if(urlCache[c[s]]){URL.revokeObjectURL(urlCache[c[s]]);delete urlCache[c[s]]}c[s]='';c.imgGone=true})});
+  Object.keys(wc.cards).forEach(function(k){var c=wc.cards[k];if(c.date>=cut)return;['setup','pre','post'].forEach(function(s){if(!c[s])return;dbDel('img',c[s]).catch(function(){});if(urlCache[c[s]]){URL.revokeObjectURL(urlCache[c[s]]);delete urlCache[c[s]]}c[s]='';c.imgGone=true})});
   wc.cleaned=t;wcSave();
 }
 /* today's cards follow the table live; past days stay frozen */
@@ -1897,22 +1903,41 @@ function wcScoreText(){
   wcAll().forEach(function(c){if(!c.added)return;if(c.result==='worked'||c.result==='missed'){w++;if(c.result==='missed')m++;if(c.aplus)aw++}else if(c.result==='failed'){f++;if(c.aplus)af++}});
   if(!w&&!f)return'';
   function p(a,b){return Math.round(a/(a+b)*100)+'%'}
-  return'Plans: '+w+' worked · '+f+' failed ('+p(w,f)+')'+(aw+af?' · A+ only: '+aw+'/'+(aw+af)+' ('+p(aw,af)+')':'')+(m?' · Taken '+(w-m)+' of '+w+' · Missed '+m:'');
+  return'Plans: '+(w-m)+' worked · '+(m?m+' missed · ':'')+f+' failed ('+p(w,f)+')'+(aw+af?' · A+ only: '+aw+'/'+(aw+af)+' ('+p(aw,af)+')':'');
 }
 function wcSetup(c){var a=[],lv=String(c.level||'').trim();if(c.dir)a.push(WL_DIRL[c.dir]);if(c.dbl)a.push('DBL break '+(c.dbl==='Yes'?'✓':'✗'));if(lv)a.push('Level '+lv);if(lv&&c.at)a.push('At level '+c.at);return a.join(' · ')}
 function wcRowId(tk){var r=wl&&wl.rows.find(function(x){return x.ticker===tk});return r?r.id:''}
 
 /* ---------- card view ---------- */
 function wcBox(c,slot){
-  var k=wcKey(c.date,c.ticker),id=c[slot],on=wlUI.tgt&&wlUI.tgt.k===k&&wlUI.tgt.s===slot,lab=slot==='pre'?'☀ Pre-market':'☾ After close';
+  var k=wcKey(c.date,c.ticker),id=c[slot],on=wlUI.tgt&&wlUI.tgt.k===k&&wlUI.tgt.s===slot,lab=WC_SLOTS[slot];
   return'<div class="wcbox'+(on?' on':'')+(id?' has':'')+'" data-act="wlbox" data-ck="'+esc(k)+'" data-slot="'+slot+'"><div class="wcbl">'+lab+'</div>'+
     (id?'<img data-img="'+id+'" data-act="zoom" alt="'+lab+' chart for '+esc(c.ticker)+'"><button class="wcx" data-act="wlrmimg" data-ck="'+esc(k)+'" data-slot="'+slot+'" aria-label="Remove '+lab+' chart">×</button>'
       :'<div class="wcem">'+(c.imgGone?'Chart cleared after 14 days':'<div>Click here, then Ctrl+V<br>or drag an image in · <label class="wcf" data-act="wlpickfile">choose file<input type="file" accept="image/*" data-act="wlfile" data-ck="'+esc(k)+'" data-slot="'+slot+'" hidden></label></div>')+'</div>')+'</div>';
 }
+/* Trade taken opens New trade with the symbol, the ☀ Before chart and the Setup chart; once saved the card links to the trade */
+function wcTrade(k){return state.trades.find(function(t){return!t.deletedAt&&t.wcKey===k})||null}
+function wcTradeHtml(c,k,live){
+  var t=wcTrade(k),lead=live?' style="margin-left:auto"':'';
+  if(t)return'<span class="k"'+lead+'><span class="win">✓ Traded</span> · <button class="btn link" data-act="opentrade" data-from="watchlist" data-id="'+t.id+'" style="padding:0">View trade</button></span>';
+  return live?'<button class="btn sm"'+lead+' data-act="wctrade" data-ck="'+esc(k)+'">Trade taken</button>':'';
+}
+function wcCopyImg(id){return id?dbGet('img',id).then(function(b){if(!b)return'';var n='i'+uid();return dbPut('img',n,b).then(function(){return n})}).catch(function(){return''}):Promise.resolve('')}
+ACT.wctrade=function(b){
+  var k=b.dataset.ck,c=wc.cards[k];if(!c)return;
+  if(draft&&draftSig(draft)!==draft._base){go('form');toast('Save or discard the trade you are writing first');return}
+  Promise.all([wcCopyImg(c.pre),wcCopyImg(c.setup)]).then(function(ids){
+    if(draft)dropDraftImages();
+    var d=blankDraft();d.symbol=c.ticker;d.wcKey=k;d.shotRoles={};
+    if(ids[0]){d.shots.push(ids[0]);d.shotRoles[ids[0]]='before'}
+    if(ids[1]){d.shots.push(ids[1]);d.shotRoles[ids[1]]='setup'}
+    draft=freshDraft(syncDir(d));go('form');
+  });
+};
 function wcCard(c,live){
   var k=wcKey(c.date,c.ticker),res=wcRes(c.result),rid=live?wcRowId(c.ticker):'';
-  return'<div class="panel wcard'+(c.aplus?' wlA':'')+'" data-rid="'+rid+'"><div class="wch"><button class="btn link" data-act="wlhist" data-t="'+esc(c.ticker)+'" style="padding:0;font-size:16px;font-weight:600" title="See history">'+esc(c.ticker)+'</button>'+(c.aplus?'<span class="pill win">A+</span>':'')+'<span class="k">'+esc(wcSetup(c)||'No setup marked')+'</span>'+(c.earn?'<span class="pill '+(c.ecls||'even')+'">Earnings '+esc(c.earn)+'</span>':'')+(live?'':'<span class="k" style="margin-left:auto">'+esc(wlLongDate(c.date))+'</span>')+'<button class="btn sm" data-act="wccopy" data-ck="'+esc(k)+'"'+(live?' style="margin-left:auto"':'')+'>Copy image</button></div>'+
-    '<div class="wcimgs">'+wcBox(c,'pre')+wcBox(c,'post')+'</div>'+
+  return'<div class="panel wcard'+(c.aplus?' wlA':'')+'" data-rid="'+rid+'"><div class="wch"><button class="btn link" data-act="wlhist" data-t="'+esc(c.ticker)+'" style="padding:0;font-size:16px;font-weight:600" title="See history">'+esc(c.ticker)+'</button>'+(c.aplus?'<span class="pill win">A+</span>':'')+'<span class="k">'+esc(wcSetup(c)||'No setup marked')+'</span>'+(c.earn?'<span class="pill '+(c.ecls||'even')+'">Earnings '+esc(c.earn)+'</span>':'')+(live?'':'<span class="k" style="margin-left:auto">'+esc(wlLongDate(c.date))+'</span>')+wcTradeHtml(c,k,live)+'<button class="btn sm" data-act="wccopy" data-ck="'+esc(k)+'">Copy image</button></div>'+
+    '<div class="wcimgs wc3">'+wcBox(c,'setup')+wcBox(c,'pre')+wcBox(c,'post')+'</div>'+
     '<div class="wcn"><label class="f"><span>☀ Plan</span>'+(rid?'<input data-wlf="waiting" data-id="'+rid+'" value="'+esc(c.plan||'')+'" placeholder="What has to happen first" autocomplete="off">':'<div class="wcplan">'+(c.plan?esc(c.plan):'<span class="mut">No plan written</span>')+'</div>')+'</label>'+
     '<label class="f"><span>☾ After</span><input data-wca="after" data-ck="'+esc(k)+'" value="'+esc(c.after||'')+'" placeholder="What actually happened" autocomplete="off"></label>'+
     '<label class="f wcres"><span>Plan result</span><select data-wca="result" data-ck="'+esc(k)+'"'+(res?' style="color:var(--'+res[2]+')"':'')+'><option value="">—</option>'+WC_RES.map(function(o){return'<option value="'+o[0]+'"'+(c.result===o[0]?' selected':'')+'>'+o[1]+'</option>'}).join('')+'</select></label></div></div>';
@@ -1934,7 +1959,7 @@ function wcPut(k,s,file){
   var c=wc.cards[k];if(!c)return;
   compress(file).then(function(b){var id='w'+uid();return dbPut('img',id,b).then(function(){
     var old=c[s];c[s]=id;c.imgGone=false;wcSave();if(old)dbDel('img',old).catch(function(){});
-    wlUI.tgt={k:k,s:s};render();toast((s==='pre'?'☀ Pre-market':'☾ After close')+' chart added for '+c.ticker);
+    wlUI.tgt={k:k,s:s};render();toast(WC_SLOTS[s].replace(' · zoomed out','')+' chart added for '+c.ticker);
   })}).catch(function(e){console.error(e);toast("Couldn't add that image")});
 }
 ACT.wlbox=function(b){wlUI.tgt={k:b.dataset.ck,s:b.dataset.slot};document.querySelectorAll('.wcbox.on').forEach(function(x){x.classList.remove('on')});b.classList.add('on')};
@@ -2027,10 +2052,10 @@ ACT.wlcopy=function(){
 };
 
 
-/* ---------- Copy image for one watchlist card (☀ pre-market and ☾ after-close side by side) ---------- */
+/* ---------- Copy image for one watchlist card (Setup wide on top, ☀ Before and ☾ After side by side) ---------- */
 async function watchCardImage(c){
   await cardFonts();
-  var res=wcRes(c.result),slots=[['☀ PRE-MARKET',c.pre],['☾ AFTER CLOSE',c.post]].filter(function(x){return x[1]});
+  var res=wcRes(c.result),slots=[['SETUP',c.setup],['☀ BEFORE',c.pre],['☾ AFTER',c.post]].filter(function(x){return x[1]});
   var logo=await imgEl(state.brand&&state.brand.logo),imgs=await shotEls(slots.map(function(x){return x[1]}));
   slots=slots.filter(function(x,i){x[2]=imgs[i];return imgs[i]});
   var W=1600,P=56,HEAD=250,GAP=28,cv=document.createElement('canvas'),ctx=cv.getContext('2d');
@@ -2038,8 +2063,10 @@ async function watchCardImage(c){
   cardFont(ctx,28,400,0);
   var noteLines=notes.map(function(n){return wrapLines(ctx,n[1],W-2*P).slice(0,3)});
   var notesH=notes.reduce(function(a,n,i){return a+40+noteLines[i].length*40+10},0);
-  var two=slots.length===2,bw=two?(W-2*P-GAP)/2:W-2*P,bh=slots.length?Math.min(two?560:820,Math.max.apply(null,slots.map(function(x){return bw*x[2].height/x[2].width}))):0;
-  var H=HEAD+56+notesH+(slots.length?44+bh:0)+P;
+  /* rows: the setup chart gets a full-width row; before and after share the next one */
+  var top=slots[0]&&slots[0][0]==='SETUP'&&slots.length>1?[slots[0]]:null,rest=top?slots.slice(1):slots,rows=(top?[top]:[]).concat(rest.length>2?[rest.slice(0,2),rest.slice(2)]:rest.length?[rest]:[]);
+  rows=rows.map(function(r){var two=r.length===2,bw=two?(W-2*P-GAP)/2:W-2*P,bh=Math.min(two?560:(rows.length>1?620:820),Math.max.apply(null,r.map(function(x){return bw*x[2].height/x[2].width})));return{s:r,bw:bw,bh:bh}});
+  var H=HEAD+56+notesH+rows.reduce(function(a,r){return a+44+r.bh+24},0)+P;
   cv.width=W;cv.height=H;cardBase(ctx,W,H,P+70,110);
   drawLogo(ctx,logo,P,58,136);
   ctx.textAlign='left';ctx.fillStyle=CARD.gold;cardFont(ctx,34,800,8);ctx.fillText('NO FACE',P+160,118);
@@ -2052,7 +2079,7 @@ async function watchCardImage(c){
   ctx.textAlign='left';var y=HEAD+20;
   ctx.fillStyle=CARD.mut;cardFont(ctx,26,500,0);ctx.fillText((wcSetup(c)||'No setup marked')+(c.earn?'  ·  Earnings '+c.earn:''),P,y);y+=36;
   notes.forEach(function(n,i){y+=10;ctx.fillStyle=CARD.gold;cardFont(ctx,22,700,6);ctx.fillText(n[0],P,y+22);y+=34;ctx.fillStyle=CARD.ink;cardFont(ctx,28,400,0);noteLines[i].forEach(function(l){ctx.fillText(l,P,y+30);y+=40})});
-  if(slots.length){y+=24;slots.forEach(function(x,i){var bx=P+i*(bw+GAP);ctx.fillStyle=CARD.gold;cardFont(ctx,22,700,4);ctx.fillText(x[0],bx,y+20);drawFit(ctx,x[2],bx,y+36,bw,bh)})}
+  rows.forEach(function(r){y+=24;r.s.forEach(function(x,i){var bx=P+i*(r.bw+GAP);ctx.fillStyle=CARD.gold;cardFont(ctx,22,700,4);ctx.fillText(x[0],bx,y+20);drawFit(ctx,x[2],bx,y+36,r.bw,r.bh)});y+=44+r.bh})
   return cv;
 }
 ACT.wccopy=function(b){var c=wc.cards[b.dataset.ck];if(c)copyCard(watchCardImage(c),'watchlist-'+c.ticker+'-'+c.date+'.png')};

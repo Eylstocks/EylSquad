@@ -2073,11 +2073,6 @@ async function watchCardImage(c){
   ctx.fillStyle=CARD.mut;cardFont(ctx,24,500,1);ctx.fillText(wlLongDate(c.date),P+160,160);
   ctx.textAlign='right';ctx.fillStyle=CARD.ink;cardFont(ctx,64,800,1);ctx.fillText(c.ticker,W-P,112);var tw=ctx.measureText(c.ticker).width;
   if(c.aplus){cardFont(ctx,26,800,2);var aw=ctx.measureText('A+').width+28;ctx.strokeStyle=CARD.gold;ctx.lineWidth=2;rrect(ctx,W-P-tw-24-aw,74,aw,44,22);ctx.stroke();ctx.fillStyle=CARD.gold;ctx.textAlign='center';ctx.fillText('A+',W-P-tw-24-aw/2,105);ctx.textAlign='right'}
-  var rc=res?{win:CARD.win,loss:CARD.loss,warn:CARD.gold,even:CARD.mut,accent:'#5CC2C9'}[res[2]]:CARD.mut;
-  /* result as a small tag under the date; nothing until a result is picked */
-  if(res){ctx.save();ctx.textAlign='left';var dx=P+160;cardFont(ctx,20,700,2);var lab=res[1].toUpperCase(),lw=ctx.measureText(lab).width+28;
-    ctx.globalAlpha=.14;ctx.fillStyle=rc;rrect(ctx,dx,176,lw,36,18);ctx.fill();ctx.globalAlpha=1;ctx.strokeStyle=rc;ctx.lineWidth=1.5;rrect(ctx,dx,176,lw,36,18);ctx.stroke();
-    ctx.fillStyle=rc;ctx.fillText(lab,dx+14,201);ctx.restore()}
   ctx.strokeStyle=CARD.gold;ctx.globalAlpha=.45;ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(P,HEAD-18);ctx.lineTo(W-P,HEAD-18);ctx.stroke();ctx.globalAlpha=1;
   ctx.textAlign='left';var y=HEAD+20;
   ctx.fillStyle=CARD.mut;cardFont(ctx,26,500,0);ctx.fillText((wcSetup(c)||'No setup marked')+(c.earn?'  ·  Earnings '+c.earn:''),P,y);y+=36;

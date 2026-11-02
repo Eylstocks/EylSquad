@@ -1497,7 +1497,7 @@ document.head.insertAdjacentHTML('beforeend','<style>'+
 '</style>');
 
 /* ---------- settings ---------- */
-var WL_DEF=[['Market','SPY'],['Market','QQQ'],['Market','IWM'],['Market','DIA'],['Market','TLT'],['Market','VIX'],['Leveraged','SQQQ'],['Mega-cap','AAPL'],['Mega-cap','AMZN'],['Mega-cap','GOOGL'],['Mega-cap','META'],['Mega-cap','MSFT'],['Mega-cap','NFLX'],['Mega-cap','TSLA'],['Semis','AMD'],['Semis','INTC'],['Semis','MU'],['Semis','NVDA'],['Crypto','COIN'],['Crypto','GBTC'],['Crypto','MARA'],['Crypto','MSTR'],['Crypto','RIOT'],['Energy','XLE'],['Finance','XLF'],['China','BABA']];
+var WL_DEF=[['Market','SPY'],['Market','QQQ'],['Market','IWM'],['Market','TLT'],['Market','VIX'],['Leveraged','SQQQ'],['Mega-cap','AAPL'],['Mega-cap','AMZN'],['Mega-cap','GOOGL'],['Mega-cap','META'],['Mega-cap','MSFT'],['Mega-cap','NFLX'],['Mega-cap','TSLA'],['Semis','AMD'],['Semis','INTC'],['Semis','MU'],['Semis','NVDA'],['Crypto','COIN'],['Crypto','GBTC'],['Crypto','MARA'],['Crypto','MSTR'],['Crypto','RIOT'],['Energy','XLE'],['Finance','XLF'],['China','BABA']];
 var WL_DIRS=[['up','Uptrend'],['down','Downtrend'],['rup','Reversal ↑'],['rdown','Reversal ↓']];
 var WL_DBLS=[['Yes','Yes'],['No','No']];
 var WL_ATS=[['No','No'],['Near','Near'],['Yes','Yes'],['Fail','Fail']];
@@ -1860,7 +1860,8 @@ ACT.restoreyes=function(){
 function wlDayName(d){var p=d.split('-');return['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][new Date(+p[0],+p[1]-1,+p[2]).getDay()]}
 function wlLongDate(d){var p=d.split('-');return wlDayName(d)+' '+(+p[1])+'/'+(+p[2])+'/'+p[0].slice(-2)}
 var wc={cards:{},days:{},cleaned:''},wcT=null;
-var WC_RES=[['worked','✓ Worked','win'],['failed','✗ Failed','loss'],['notyet','⏳ Not yet','warn'],['none','— Didn\'t trigger','even']];
+/* Missed: the setup worked but the trade was not taken. It counts as a working plan. */
+var WC_RES=[['worked','✓ Worked','win'],['missed','🎯 Missed','accent'],['failed','✗ Failed','loss'],['notyet','⏳ Not yet','warn'],['none','— Didn\'t trigger','even']];
 function wcRes(v){return WC_RES.find(function(x){return x[0]===v})||null}
 function wcKey(d,t){return d+'|'+t}
 function wcSave(){clearTimeout(wcT);wcT=setTimeout(function(){dbPut('kv','wlcards',JSON.parse(JSON.stringify(wc))).catch(function(){})},300)}
@@ -1892,11 +1893,11 @@ function wcFor(d){return wcAll().filter(function(c){return c.date===d&&c.added})
 function wcHist(tk){return wcAll().filter(function(c){return c.ticker===tk&&c.added}).sort(function(a,b){return b.date.localeCompare(a.date)})}
 function wcOpenPlan(r){var t=today(),l=wcHist(r.ticker).filter(function(c){return c.date<t})[0];return!!(l&&l.result==='notyet')}
 function wcScoreText(){
-  var w=0,f=0,aw=0,af=0;
-  wcAll().forEach(function(c){if(!c.added)return;if(c.result==='worked'){w++;if(c.aplus)aw++}else if(c.result==='failed'){f++;if(c.aplus)af++}});
+  var w=0,m=0,f=0,aw=0,af=0;
+  wcAll().forEach(function(c){if(!c.added)return;if(c.result==='worked'||c.result==='missed'){w++;if(c.result==='missed')m++;if(c.aplus)aw++}else if(c.result==='failed'){f++;if(c.aplus)af++}});
   if(!w&&!f)return'';
   function p(a,b){return Math.round(a/(a+b)*100)+'%'}
-  return'Plans: '+w+' worked · '+f+' failed ('+p(w,f)+')'+(aw+af?' · A+ only: '+aw+'/'+(aw+af)+' ('+p(aw,af)+')':'');
+  return'Plans: '+w+' worked · '+f+' failed ('+p(w,f)+')'+(aw+af?' · A+ only: '+aw+'/'+(aw+af)+' ('+p(aw,af)+')':'')+(m?' · Taken '+(w-m)+' of '+w+' · Missed '+m:'');
 }
 function wcSetup(c){var a=[],lv=String(c.level||'').trim();if(c.dir)a.push(WL_DIRL[c.dir]);if(c.dbl)a.push('DBL break '+(c.dbl==='Yes'?'✓':'✗'));if(lv)a.push('Level '+lv);if(lv&&c.at)a.push('At level '+c.at);return a.join(' · ')}
 function wcRowId(tk){var r=wl&&wl.rows.find(function(x){return x.ticker===tk});return r?r.id:''}
@@ -2045,7 +2046,7 @@ async function watchCardImage(c){
   ctx.fillStyle=CARD.mut;cardFont(ctx,24,500,1);ctx.fillText(wlLongDate(c.date),P+160,160);
   ctx.textAlign='right';ctx.fillStyle=CARD.ink;cardFont(ctx,64,800,1);ctx.fillText(c.ticker,W-P,112);var tw=ctx.measureText(c.ticker).width;
   if(c.aplus){cardFont(ctx,26,800,2);var aw=ctx.measureText('A+').width+28;ctx.strokeStyle=CARD.gold;ctx.lineWidth=2;rrect(ctx,W-P-tw-24-aw,74,aw,44,22);ctx.stroke();ctx.fillStyle=CARD.gold;ctx.textAlign='center';ctx.fillText('A+',W-P-tw-24-aw/2,105);ctx.textAlign='right'}
-  var rc=res?{win:CARD.win,loss:CARD.loss,warn:CARD.gold,even:CARD.mut}[res[2]]:CARD.mut;
+  var rc=res?{win:CARD.win,loss:CARD.loss,warn:CARD.gold,even:CARD.mut,accent:'#5CC2C9'}[res[2]]:CARD.mut;
   ctx.save();if(res&&res[2]==='win'||res&&res[2]==='loss'){ctx.shadowColor=rc;ctx.shadowBlur=24}ctx.fillStyle=rc;cardFont(ctx,46,800,4);ctx.fillText(res?res[1].toUpperCase():'PLAN',W-P,186);ctx.restore();
   ctx.strokeStyle=CARD.gold;ctx.globalAlpha=.45;ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(P,HEAD-18);ctx.lineTo(W-P,HEAD-18);ctx.stroke();ctx.globalAlpha=1;
   ctx.textAlign='left';var y=HEAD+20;

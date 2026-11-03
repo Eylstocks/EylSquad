@@ -1384,6 +1384,10 @@ async function syncImages(u){
   }
   if(changed)await dbPut('kv','state',JSON.parse(JSON.stringify(state)));
 }
+/* trades go to the cloud one document per month, by the month the trade opened */
+function tradeMonth(t){var d=(t.execs||[]).map(function(x){return x.date}).filter(Boolean).sort()[0];return d?d.slice(0,7):'undated'}
+function tradesByMonth(list){var m={};list.forEach(function(t){var k=tradeMonth(t);(m[k]=m[k]||[]).push(t)});Object.keys(m).forEach(function(k){m[k].sort(function(a,b){return String(a.id).localeCompare(String(b.id))})});return m}
+window.tradesByMonth=tradesByMonth;window.canon=canon;
 async function syncNow(){
   var u=window.auth&&window.auth.currentUser;
   if(!u||!window.cloudLoad||!state)return;
@@ -1398,9 +1402,10 @@ async function syncNow(){
     var remote=await window.cloudLoad(u.uid),m=mergeRemote(state,remote);
     var mine=canon(normBody({trades:state.trades,cash:state.cash,lists:state.lists,purged:state.purged,brand:state.brand,settings:syncedSettings(state.settings)})),merged=canon(normBody(m));
     if(mine!==merged){state.trades=m.trades;state.cash=m.cash;state.lists=m.lists;state.purged=m.purged;state.brand=m.brand;var ks=state.settings.fhKey;state.settings.fhKey=m.settings.fhKey;state.settings.fee=m.settings.fee;state.settings.shotDays=m.settings.shotDays;state.settings.settingsAt=m.settings.at;if(ks!==state.settings.fhKey){state.settings.earnFetched='';state.settings.holFetched='';setTimeout(syncHolidays,0)}await dbPut('kv','state',JSON.parse(JSON.stringify(state)));if(view.name!=='form')render()}
-    if(!remote||canon(normBody(remote))!==merged){
+    if(!remote||remote._legacy||canon(normBody(remote))!==merged){
       var payload=JSON.parse(JSON.stringify({trades:m.trades,cash:m.cash,lists:m.lists,purged:m.purged,brand:m.brand,settings:m.settings,updatedAt:new Date().toISOString()}));
-      if(JSON.stringify(payload).length>900000){setCloud('Cloud: journal too large to sync');toast('The cloud copy is nearly full. Ask Claude to switch it to per-trade storage.')}
+      var tm=tradesByMonth(payload.trades||[]),big=Object.keys(tm).filter(function(k){return JSON.stringify(tm[k]).length>900000}),rest=Object.assign({},payload);delete rest.trades;
+      if(big.length||JSON.stringify(rest).length>900000){setCloud('Cloud: too large to sync');toast('One part of the cloud copy is too large to sync ('+(big[0]||'settings and logo')+'). Ask Claude to look at it.')}
       else{await window.cloudPut(u.uid,payload);setCloud('Cloud: synced '+new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}))}
     }else setCloud('Cloud: synced '+new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}));
     try{await syncImages(u);hydrate()}catch(e){console.error('Screenshot sync failed:',e);setCloud('Cloud: trades synced, screenshots pending')}
@@ -2175,7 +2180,7 @@ ACT.wccopy=function(b){var c=wc.cards[b.dataset.ck];if(c)copyCard(watchCardImage
 <!-- Firebase SDKs -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-    import { getFirestore, doc, setDoc, getDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+    import { getFirestore, doc, setDoc, getDoc, deleteDoc, collection, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
     import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
     const firebaseConfig = {
@@ -2248,13 +2253,37 @@ ACT.wccopy=function(b){var c=wc.cards[b.dataset.ck];if(c)copyCard(watchCardImage
       if (window.syncNow) await window.syncNow();
     };
 
+    // Trades are kept one document per month at users/{uid}/trades/{YYYY-MM} (the month the trade opened),
+    // so no single document can reach Firestore's 1 MB limit. Everything else stays in users/{uid}.
+    let lastMonths = {};
     window.cloudLoad = async function(uid) {
       const snap = await getDoc(doc(window.db, "users", uid));
-      return snap.exists() ? snap.data() : null;
+      const main = snap.exists() ? snap.data() : null;
+      const qs = await getDocs(collection(window.db, "users", uid, "trades"));
+      const fromMonths = [];
+      lastMonths = {};
+      qs.forEach((d) => { const list = d.data().trades || []; lastMonths[d.id] = window.canon(list); fromMonths.push(...list); });
+      if (!main && !fromMonths.length) return null;
+      const out = Object.assign({}, main || {});
+      const legacy = Array.isArray(out.trades) && out.trades.length > 0;
+      const byId = {};
+      (out.trades || []).concat(fromMonths).forEach((t) => { const o = byId[t.id]; if (!o || (t.updatedAt || 0) >= (o.updatedAt || 0)) byId[t.id] = t; });
+      out.trades = Object.values(byId);
+      if (legacy) out._legacy = true;
+      return out;
     };
 
     window.cloudPut = async function(uid, payload) {
-      await setDoc(doc(window.db, "users", uid), payload);
+      const months = window.tradesByMonth(payload.trades || []);
+      for (const m in months) {
+        const c = window.canon(months[m]);
+        if (lastMonths[m] !== c) { await setDoc(doc(window.db, "users", uid, "trades", m), { trades: months[m] }); lastMonths[m] = c; }
+      }
+      for (const m of Object.keys(lastMonths)) {
+        if (!months[m]) { await deleteDoc(doc(window.db, "users", uid, "trades", m)); delete lastMonths[m]; }
+      }
+      const main = Object.assign({}, payload); delete main.trades; main.tradesByMonth = true;
+      await setDoc(doc(window.db, "users", uid), main);
     };
 
     // Screenshots: one small document each at users/{uid}/images/{id}

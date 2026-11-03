@@ -441,7 +441,7 @@ function chartSvg(rows,msg,base0,mask){
 var PERIOD_DAYS={'30D':30,'90D':90,'180D':180};
 function inPeriod(c){
   var p=state.period;if(p==='all'||!c.closed)return true;
-  if(PERIOD_DAYS[p])return c.closeDate>=addDays(nyNow().date,-PERIOD_DAYS[p]);
+  if(PERIOD_DAYS[p])return c.closeDate>=addDays(nyNow().date,1-PERIOD_DAYS[p]);
   var y=p==='ytd'?nyNow().date.slice(0,4):p.slice(1);
   return c.closeDate.slice(0,4)===y;
 }
@@ -459,7 +459,7 @@ function tstats(list){
   asc.forEach(function(x){cum+=x.c.net;if(cum>peak)peak=cum;if(peak-cum>dd)dd=peak-cum});
   return{n:asc.length,wins:w.length,losses:l.length,net:net,fees:fees,avgWin:w.length?sw/w.length:null,avgLoss:l.length?sl/l.length:null,pf:sl>0?sw/sl:null,exp:asc.length?net/asc.length:null,dd:dd,winRate:asc.length?w.length/asc.length:null};
 }
-function periodStart(){var p=state.period,t=nyNow().date;return PERIOD_DAYS[p]?addDays(t,-PERIOD_DAYS[p]):p==='ytd'?t.slice(0,4)+'-01-01':/^Y\d{4}$/.test(p)?p.slice(1)+'-01-01':null}
+function periodStart(){var p=state.period,t=nyNow().date;return PERIOD_DAYS[p]?addDays(t,1-PERIOD_DAYS[p]):p==='ytd'?t.slice(0,4)+'-01-01':/^Y\d{4}$/.test(p)?p.slice(1)+'-01-01':null}
 function pnlRows(list){var asc=ascClosed(list),rows=[],cum=0,st=periodStart();if(!asc.length)return rows;rows.push({date:st&&st<asc[0].c.closeDate?st:asc[0].c.closeDate,balance:0});asc.forEach(function(x){cum+=x.c.net;rows.push({date:x.c.closeDate,balance:cum})});return rows}
 var closedNotices={};
 var tf={q:'',result:'',setup:'',tag:''};
@@ -604,7 +604,7 @@ VIEWS.dashboard=function(){
   var all=sortedTrades(),shown=all.filter(function(x){return inPeriod(x.c)}),closed=shown.filter(function(x){return x.c.closed}),open=all.filter(function(x){return!x.c.closed});
   var S=tstats(closed),decided=closed.filter(function(x){return x.t.followed!=null}),fol=decided.filter(function(x){return x.t.followed===true}).length;
   var led=ledger(),bal=led.length?led[led.length-1].balance:0,dep=state.cash.reduce(function(a,x){return a+(x.type==='deposit'?+x.amount:-x.amount)},0);
-  var allPnl=led.filter(function(r){return r.kind==='trade'}).reduce(function(a,r){return a+r.amount},0),allFees=led.filter(function(r){return r.kind==='fee'}).reduce(function(a,r){return a+r.amount},0),ret=dep>0?(allPnl+allFees)/dep*100:null;
+  var allPnl=led.filter(function(r){return r.kind==='trade'}).reduce(function(a,r){return a+r.amount},0),allFees=led.filter(function(r){return r.kind==='fee'}).reduce(function(a,r){return a+r.amount},0),depIn=state.cash.reduce(function(a,x){return a+(x.type==='deposit'?+x.amount:0)},0),ret=depIn>0?(allPnl+allFees)/depIn*100:null;
   var review=needsReview(),stale=state.trades.length&&(!state.settings.lastBackup||daysBetween(state.settings.lastBackup,nyNow().date)>14),mode=state.curve==='balance'?'balance':'pnl';
   var h='<div class="top"><div><h1>Dashboard</h1><p class="sub">'+open.length+' open '+(open.length===1?'trade':'trades')+(review.length?' · <button class="btn link" data-act="review">'+review.length+(review.length===1?' trade needs':' trades need')+' a review</button>':'')+'</p></div><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">'+periodBar()+'<button class="btn primary" data-go="form">New trade</button></div></div>';
   if(stale&&!closedNotices.backup)h+='<div class="callout"><span>Your journal lives in this browser only. Back it up so a cleared browser can\'t erase it.</span><span style="display:flex;gap:6px;align-items:center"><button class="btn sm" data-go="account">Back up now</button>'+dismissBtn('backup')+'</span></div>';
@@ -1481,6 +1481,7 @@ document.head.insertAdjacentHTML('beforeend','<style>'+
 '.wlt .wllast{font-size:11.5px;color:var(--muted);margin-left:4px}'+
 '.wlt .wltk{padding:0;font-weight:600;color:var(--ink);font-size:14px}.wlt .wltk:hover{color:var(--accent);text-decoration:underline}'+
 '.wlci{font-size:13px;color:var(--line2);margin-left:3px}.wlci.on{color:var(--accent)}'+
+'.wchead{margin-top:24px;flex-wrap:wrap;gap:10px}.wcdays{display:flex;align-items:center;gap:10px}.wcsum{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:14px;color:var(--ink2)}'+
 '.wcards{display:grid;gap:12px;margin-top:10px}.wcard{padding:14px 16px}.wcard.wlA{box-shadow:inset 3px 0 0 var(--win)}'+
 '.wch{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px}'+
 '.wcimgs{display:grid;grid-template-columns:1fr 1fr;gap:10px}.wcimgs.wc3{grid-template-columns:1fr 1fr 1fr}'+
@@ -1664,11 +1665,48 @@ async function wlSync(){
     var m=wlMerge(wl,remote),merged=canon(wlBody(m));
     if(canon(wlBody(wl))!==merged){wl.rows=m.rows;wl.day=m.day;wl.purged=m.purged;await dbPut('kv','watchlist',wlClone());if(view.name==='watchlist'&&!wlTyping())render()}
     if(!remote||canon(wlBody(remote))!==merged){var body=wlBody(m);body.updatedAt=new Date().toISOString();await f.setDoc(ref,JSON.parse(JSON.stringify(body)))}
-    wlSetCloud('Synced '+new Date().toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}));
+    wlSetCloud('Synced '+new Date().toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}));wcSchedule(0);
   }catch(e){console.error('Watchlist sync failed (saved on this PC):',e);wlSetCloud('Sync failed, saved on this PC')}
   wlSyncBusy=false;if(wlSyncAgain){wlSyncAgain=false;wlSync()}
 }
-(function(){var orig=window.syncNow;if(typeof orig!=='function')return;window.syncNow=function(){var p=orig.apply(this,arguments);if(wl){wlSchedule(0);wlEarnRefresh()}else wlEnsure();return p}})();
+(function(){var orig=window.syncNow;if(typeof orig!=='function')return;window.syncNow=function(){var p=orig.apply(this,arguments);if(wl){wlSchedule(0);wcSchedule(0);wlEarnRefresh()}else wlEnsure();return p}})();
+
+/* ---------- cloud sync for day cards: one document per month (cards, day notes, kept results); charts go to images ---------- */
+function wcSchedule(ms){clearTimeout(wcSyncT);wcSyncT=setTimeout(wcSync,ms)}
+function wcMonthBody(mo){
+  var b={cards:{},days:{},done:wc.done[mo]||{}};
+  Object.keys(wc.cards).forEach(function(k){if(wcMonthOf(k)===mo)b.cards[k]=wc.cards[k]});
+  Object.keys(wc.days).forEach(function(d){if(d.slice(0,7)===mo)b.days[d]=wc.days[d]});
+  return b;
+}
+async function wcSync(){
+  var u=window.auth&&window.auth.currentUser;if(!u||!window.db)return;
+  if(wcBusy){wcAgain=true;return}
+  wcBusy=true;
+  try{
+    var f=await wlFs(),col=f.collection(window.db,'users',u.uid,'wcards'),snap=await f.getDocs(col),remote={},cut=wcCut(),changed=false;
+    snap.forEach(function(d){remote[d.id]=d.data()});
+    Object.keys(remote).forEach(function(mo){
+      var r=remote[mo]||{};
+      Object.keys(r.done||{}).forEach(function(k){var d=wc.done[mo]=wc.done[mo]||{};if(!d[k]){d[k]=r.done[k];changed=true}});
+      Object.keys(r.cards||{}).forEach(function(k){
+        var rc=r.cards[k],lc=wc.cards[k];if(wcIsDone(k)||!rc||rc.date<cut)return;
+        if(!lc||(rc.updatedAt||0)>(lc.updatedAt||0)){wc.cards[k]=rc;wcSig[k]=wcCardSig(rc);changed=true}
+      });
+      Object.keys(r.days||{}).forEach(function(d){if(d>=cut&&!wc.days[d]){wc.days[d]=r.days[d];changed=true}});
+    });
+    Object.keys(wc.cards).forEach(function(k){if(wcIsDone(k)){wcArchive(k);changed=true}else if(wc.cards[k].date<cut){wcArchive(k);changed=true}});
+    /* charts up, deleted charts removed */
+    var ids=[];Object.keys(wc.cards).forEach(function(k){var c=wc.cards[k];['setup','pre','post'].forEach(function(sl){if(c[sl]&&!wc.up[c[sl]])ids.push(c[sl])})});
+    for(var i=0;i<ids.length;i++){var b=await dbGet('img',ids[i]);if(!b)continue;var data=await cloudImageData(b);if(!data)continue;await window.cloudPutImage(u.uid,ids[i],data);wc.up[ids[i]]=1;changed=true}
+    while(wc.del.length){var id=wc.del.shift();await window.cloudDelImage(u.uid,id).catch(function(){});changed=true}
+    /* month documents */
+    var mos={};Object.keys(remote).concat(Object.keys(wc.done)).concat(Object.keys(wc.cards).map(wcMonthOf)).concat(Object.keys(wc.days).map(function(d){return d.slice(0,7)})).forEach(function(m){mos[m]=1});
+    for(var m in mos){var body=wcMonthBody(m);if(canon(body)!==canon(remote[m]?{cards:remote[m].cards||{},days:remote[m].days||{},done:remote[m].done||{}}:null))await f.setDoc(f.doc(window.db,'users',u.uid,'wcards',m),JSON.parse(JSON.stringify(body)))}
+    if(changed){await dbPut('kv','wlcards',JSON.parse(JSON.stringify(wc)));if(view.name==='watchlist'&&!wlTyping())render()}
+  }catch(e){console.error('Watchlist cards sync failed (saved on this PC):',e)}
+  wcBusy=false;if(wcAgain){wcAgain=false;wcSync()}
+}
 
 /* ---------- view ---------- */
 function wlApHtml(r){if(!wlAplus(r))return'';var e=wlEarn(r),w=e&&e.eff<=1?' <span class="loss" title="Earnings '+(e.n===0?'today':'within 1 day')+'">⚠</span>':'';return(r.checked===today()?'<span class="pill win">A+</span>':'<span class="pill even" title="Not checked today">A+?</span>')+w}
@@ -1710,7 +1748,7 @@ function wlHelp(){
     ['Daily routine','Set each ticker to Add or Pass in the Today column. Setups carry over from day to day; Add and Pass reset each morning.'],
     ['Keyboard','↑ ↓ select a row · 1–4 direction · D DBL break · L level · 5–8 at level · W waiting for · A add · P pass · Enter or Esc leaves a field.'],
     ['Earnings','Green: 2–5 trading days away. Red: today or tomorrow (☀ before the open counts one day earlier). Weekends and market holidays are skipped.'],
-    ['Charts','Click the ☀ or ☾ box on a card, then paste with Ctrl+V. If no box is selected, the paste goes to ☀ before 9:30am and ☾ after 4pm. Charts stay on this PC and are deleted after 14 days.'],
+    ['Charts','Click the ☀ or ☾ box on a card, then paste with Ctrl+V. If no box is selected, the paste goes to ☀ before 9:30am and ☾ after 4pm. Cards and charts sync to your account and are deleted after 7 days. Plan results stay in the summary line.'],
     ['History','Click a ticker name to see its past plans, charts and results.'],
     ['Sharing','Copy text posts the day summary to Discord. Copy image on a card shares that ticker with its charts.']
   ];
@@ -1723,7 +1761,7 @@ VIEWS.watchlist=function(){
   if(!list.some(function(r){return r.id===wlUI.sel})){var u=list.find(function(r){return r.checked!==t})||list[0];wlUI.sel=u?u.id:null}
   function count(fn){return wl.rows.filter(fn).length}
   var nChk=count(function(r){return r.checked===t}),nAdd=count(function(r){return wlPick(r)==='add'}),nPass=count(function(r){return wlPick(r)==='pass'}),nAp=count(function(r){return wlAplus(r)&&r.checked===t});
-  var h='<div class="top"><div><h1>Watchlist</h1><p class="sub">'+(N&&nChk===N?'<span class="win">All '+N+' checked today ✓</span>':nChk+' of '+N+' checked today')+' · '+nAdd+' on today\'s list'+(nAp?' · <span class="win">'+nAp+' A+</span>':'')+'<span id="wlcloud">'+(wlCloud?' · '+esc(wlCloud):'')+'</span></p></div><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button class="btn" data-act="wlearn">Refresh earnings</button><input type="date" data-wlpd="1" value="'+esc(wlUI.pd||t)+'" max="'+t+'" aria-label="Day to export" title="Day to export" style="width:auto;padding:7px 8px"><button class="btn" data-act="wlcopy" title="Copy a text summary for Discord">'+(wlUI.cq&&wlUI.cq.d===(wlUI.pd||t)?'Copy part '+(wlUI.cq.i+1)+' of '+wlUI.cq.parts.length:'Copy text')+'</button></div></div>';
+  var h='<div class="top"><div><h1>Watchlist</h1><p class="sub">'+(N&&nChk===N?'<span class="win">All '+N+' checked today ✓</span>':nChk+' of '+N+' checked today')+' · '+nAdd+' on today\'s list'+(nAp?' · <span class="win">'+nAp+' A+</span>':'')+'<span id="wlcloud">'+(wlCloud?' · '+esc(wlCloud):'')+'</span></p></div><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button class="btn" data-act="wlearn">Refresh earnings</button><button class="btn" data-act="wlcopy" title="Copy a text summary of the day shown below for Discord">'+(wlUI.cq&&wlUI.cq.d===(wlUI.pd||t)?'Copy part '+(wlUI.cq.i+1)+' of '+wlUI.cq.parts.length:'Copy text')+'</button></div></div>';
   h+='<div class="panel" style="padding:10px 18px;margin-bottom:14px">'+wlDayRow('Any major news?','news',day)+wlEarnRow()+'</div>';
   h+='<div class="seg" style="margin-bottom:10px" role="group" aria-label="Filter">'+[['all','All',N-nPass],['today','Today\'s list',nAdd],['unchecked','Not checked',N-nChk],['skipped','Skipped',nPass]].map(function(c){return'<button class="chip'+(wlUI.f===c[0]?' on':'')+'" data-act="wlfilter" data-v="'+c[0]+'">'+c[1]+' ('+c[2]+')</button>'}).join('')+'</div>';
   h+='<div class="panel tablewrap"><table class="tbl wlt"><thead><tr><th>Ticker</th><th>Earnings</th><th>Direction</th><th>DBL break</th><th>Level</th><th>At level</th><th>Waiting for</th><th>Today</th><th></th></tr></thead><tbody>';
@@ -1864,19 +1902,34 @@ ACT.restoreyes=function(){
 /* ---------- day cards: ☀/☾ charts, plan snapshot, result (kept on this PC only) ---------- */
 function wlDayName(d){var p=d.split('-');return['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][new Date(+p[0],+p[1]-1,+p[2]).getDay()]}
 function wlLongDate(d){var p=d.split('-');return wlDayName(d)+' '+(+p[1])+'/'+(+p[2])+'/'+p[0].slice(-2)}
-var wc={cards:{},days:{},cleaned:''},wcT=null;
+var wc={cards:{},days:{},cleaned:'',done:{},up:{},del:[]},wcT=null,wcSig={},wcSyncT=null,wcBusy=false,wcAgain=false;
 /* Missed: the setup worked but the trade was not taken. It counts as a working plan. */
 var WC_RES=[['worked','✓ Worked','win'],['missed','🎯 Missed','accent'],['failed','✗ Failed','loss'],['notyet','⏳ Not yet','warn'],['none','— Didn\'t trigger','even']];
 var WC_SLOTS={setup:'Setup · zoomed out',pre:'☀ Before',post:'☾ After'};
 function wcRes(v){return WC_RES.find(function(x){return x[0]===v})||null}
 function wcKey(d,t){return d+'|'+t}
-function wcSave(){clearTimeout(wcT);wcT=setTimeout(function(){dbPut('kv','wlcards',JSON.parse(JSON.stringify(wc))).catch(function(){})},300)}
-function wcLoad(){return dbGet('kv','wlcards').then(function(s){if(s&&s.cards){wc.cards=s.cards;wc.days=s.days||{};wc.cleaned=s.cleaned||''}wcClean()},function(){})}
-/* charts older than 14 days are deleted; the text stays */
+/* a card's updatedAt changes whenever any of its fields change, so the newest copy wins when devices sync */
+function wcCardSig(c){var x=Object.assign({},c);delete x.updatedAt;return JSON.stringify(x)}
+function wcStamp(){Object.keys(wc.cards).forEach(function(k){var sg=wcCardSig(wc.cards[k]);if(wcSig[k]!==sg){wcSig[k]=sg;wc.cards[k].updatedAt=Date.now()}})}
+function wcSave(){wcStamp();clearTimeout(wcT);wcT=setTimeout(function(){dbPut('kv','wlcards',JSON.parse(JSON.stringify(wc))).catch(function(){})},300);wcSchedule(2000)}
+function wcLoad(){return dbGet('kv','wlcards').then(function(s){if(s&&s.cards){wc.cards=s.cards;wc.days=s.days||{};wc.cleaned=s.cleaned||'';wc.done=s.done||{};wc.up=s.up||{};wc.del=s.del||[]}Object.keys(wc.cards).forEach(function(k){wcSig[k]=wcCardSig(wc.cards[k])});wcClean()},function(){})}
+/* results kept for the summary line after a card is deleted: w, m or f, with + for A+ */
+var WC_CODE={worked:'w',missed:'m',failed:'f'};
+function wcMonthOf(k){return k.slice(0,7)}
+function wcIsDone(k){var d=wc.done[wcMonthOf(k)];return!!(d&&d[k])}
+function wcArchive(k){
+  var c=wc.cards[k];if(!c)return;var mo=wcMonthOf(k),code=c.added&&WC_CODE[c.result];
+  if(code){(wc.done[mo]=wc.done[mo]||{})[k]=code+(c.aplus?'+':'')}
+  ['setup','pre','post'].forEach(function(sl){var id=c[sl];if(!id)return;dbDel('img',id).catch(function(){});if(urlCache[id]){URL.revokeObjectURL(urlCache[id]);delete urlCache[id]}if(wc.up[id]){wc.del.push(id);delete wc.up[id]}});
+  delete wc.cards[k];delete wcSig[k];
+}
+/* cards are kept 7 days, then deleted with their charts; the result stays in that month's totals */
+function wcCut(){return addDays(today(),-7)}
 function wcClean(){
   var t=today();if(wc.cleaned===t)return;
-  var cut=addDays(t,-14);
-  Object.keys(wc.cards).forEach(function(k){var c=wc.cards[k];if(c.date>=cut)return;['setup','pre','post'].forEach(function(s){if(!c[s])return;dbDel('img',c[s]).catch(function(){});if(urlCache[c[s]]){URL.revokeObjectURL(urlCache[c[s]]);delete urlCache[c[s]]}c[s]='';c.imgGone=true})});
+  var cut=wcCut();
+  Object.keys(wc.cards).forEach(function(k){if(wc.cards[k].date<cut)wcArchive(k)});
+  Object.keys(wc.days).forEach(function(d){if(d<cut)delete wc.days[d]});
   wc.cleaned=t;wcSave();
 }
 /* today's cards follow the table live; past days stay frozen */
@@ -1898,12 +1951,44 @@ function wcAll(){return Object.keys(wc.cards).map(function(k){return wc.cards[k]
 function wcFor(d){return wcAll().filter(function(c){return c.date===d&&c.added}).sort(function(a,b){return(b.aplus?1:0)-(a.aplus?1:0)||String(a.group).localeCompare(String(b.group))||a.ticker.localeCompare(b.ticker)})}
 function wcHist(tk){return wcAll().filter(function(c){return c.ticker===tk&&c.added}).sort(function(a,b){return b.date.localeCompare(a.date)})}
 function wcOpenPlan(r){var t=today(),l=wcHist(r.ticker).filter(function(c){return c.date<t})[0];return!!(l&&l.result==='notyet')}
-function wcScoreText(){
-  var w=0,m=0,f=0,aw=0,af=0;
-  wcAll().forEach(function(c){if(!c.added)return;if(c.result==='worked'||c.result==='missed'){w++;if(c.result==='missed')m++;if(c.aplus)aw++}else if(c.result==='failed'){f++;if(c.aplus)af++}});
-  if(!w&&!f)return'';
-  function p(a,b){return Math.round(a/(a+b)*100)+'%'}
-  return'Plans: '+(w-m)+' worked · '+(m?m+' missed · ':'')+f+' failed ('+p(w,f)+')'+(aw+af?' · A+ only: '+aw+'/'+(aw+af)+' ('+p(aw,af)+')':'');
+/* plan results by month: kept results plus this week's cards */
+function wcMonths(){
+  var out={};
+  function add(mo,code){var g=out[mo]=out[mo]||{w:0,m:0,f:0,aw:0,af:0},r=code.charAt(0),ap=code.charAt(1)==='+';g[r]++;if(ap){if(r==='f')g.af++;else g.aw++}}
+  Object.keys(wc.done).forEach(function(mo){Object.keys(wc.done[mo]).forEach(function(k){add(mo,wc.done[mo][k])})});
+  Object.keys(wc.cards).forEach(function(k){var c=wc.cards[k],code=c.added&&WC_CODE[c.result];if(code&&!wcIsDone(k))add(wcMonthOf(k),code+(c.aplus?'+':''))});
+  return out;
+}
+function wcPctOf(g){var n=g.w+g.m+g.f;return n?Math.round((g.w+g.m)/n*100):null}
+function wcMonLabel(mo,withYear){var n=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+mo.slice(5)-1];return withYear?n+' '+mo.slice(0,4):n}
+function wcPerOptions(M){
+  var cm=today().slice(0,7),cy=cm.slice(0,4),per=wlUI.per||'month',mos=Object.keys(M).filter(function(m){return m!==cm}).sort().reverse(),yrs={};
+  Object.keys(M).forEach(function(m){if(m.slice(0,4)!==cy)yrs[m.slice(0,4)]=1});
+  function o(v,l){return'<option value="'+v+'"'+(per===v?' selected':'')+'>'+l+'</option>'}
+  return o('month','This month')+o('year','This year')+o('all','All time')+
+    (mos.length?'<optgroup label="Past months">'+mos.map(function(m){return o('M'+m,wcMonLabel(m,true))}).join('')+'</optgroup>':'')+
+    (Object.keys(yrs).length?'<optgroup label="Past years">'+Object.keys(yrs).sort().reverse().map(function(y){return o('Y'+y,y)}).join('')+'</optgroup>':'');
+}
+function wcSummary(){
+  var M=wcMonths(),per=wlUI.per||'month',cm=today().slice(0,7),inScope;
+  if(per==='month')inScope=function(m){return m===cm};
+  else if(per==='year')inScope=function(m){return m.slice(0,4)===cm.slice(0,4)};
+  else if(per==='all')inScope=function(){return true};
+  else if(per.charAt(0)==='M')inScope=function(m){return m===per.slice(1)};
+  else inScope=function(m){return m.slice(0,4)===per.slice(1)};
+  var mos=Object.keys(M).filter(inScope),g={w:0,m:0,f:0,aw:0,af:0};
+  mos.forEach(function(m){['w','m','f','aw','af'].forEach(function(x){g[x]+=M[m][x]})});
+  var sel='<select data-wcper="1" aria-label="Plan results period" style="width:auto;padding:4px 8px;font-size:13px">'+wcPerOptions(M)+'</select>';
+  var n=g.w+g.m+g.f,txt;
+  if(!n)txt='<span class="mut">No plan results yet</span>';
+  else{
+    txt=g.w+' worked · '+g.m+' missed · '+g.f+' failed · setups right <b>'+wcPctOf(g)+'%</b>'+(g.aw+g.af?' · A+ '+g.aw+'/'+(g.aw+g.af):'');
+    if(per==='year'||per==='all'||per.charAt(0)==='Y'){
+      var q=mos.filter(function(m){var x=M[m];return x.w+x.m+x.f>=5}).sort(function(a,b){return wcPctOf(M[b])-wcPctOf(M[a])||a.localeCompare(b)});
+      if(q.length>=2){var yr=per==='all';txt+=' · Best: '+wcMonLabel(q[0],yr)+' '+wcPctOf(M[q[0]])+'% · Worst: '+wcMonLabel(q[q.length-1],yr)+' '+wcPctOf(M[q[q.length-1]])+'%'}
+    }
+  }
+  return'<div class="wcsum"><span>Plans</span>'+sel+'<span>'+txt+'</span></div>';
 }
 function wcSetup(c){var a=[],lv=String(c.level||'').trim();if(c.dir)a.push(WL_DIRL[c.dir]);if(c.dbl)a.push('DBL break '+(c.dbl==='Yes'?'✓':'✗'));if(lv)a.push('Level '+lv);if(lv&&c.at)a.push('At level '+c.at);return a.join(' · ')}
 function wcRowId(tk){var r=wl&&wl.rows.find(function(x){return x.ticker===tk});return r?r.id:''}
@@ -1913,7 +1998,7 @@ function wcBox(c,slot){
   var k=wcKey(c.date,c.ticker),id=c[slot],on=wlUI.tgt&&wlUI.tgt.k===k&&wlUI.tgt.s===slot,lab=WC_SLOTS[slot];
   return'<div class="wcbox'+(on?' on':'')+(id?' has':'')+'" data-act="wlbox" data-ck="'+esc(k)+'" data-slot="'+slot+'"><div class="wcbl">'+lab+'</div>'+
     (id?'<img data-img="'+id+'" data-act="zoom" alt="'+lab+' chart for '+esc(c.ticker)+'"><button class="wcx" data-act="wlrmimg" data-ck="'+esc(k)+'" data-slot="'+slot+'" aria-label="Remove '+lab+' chart">×</button>'
-      :'<div class="wcem">'+(c.imgGone?'Chart cleared after 14 days':'<div>Click here, then Ctrl+V<br>or drag an image in · <label class="wcf" data-act="wlpickfile">choose file<input type="file" accept="image/*" data-act="wlfile" data-ck="'+esc(k)+'" data-slot="'+slot+'" hidden></label></div>')+'</div>')+'</div>';
+      :'<div class="wcem">'+(c.imgGone?'Chart removed':'<div>Click here, then Ctrl+V<br>or drag an image in · <label class="wcf" data-act="wlpickfile">choose file<input type="file" accept="image/*" data-act="wlfile" data-ck="'+esc(k)+'" data-slot="'+slot+'" hidden></label></div>')+'</div>')+'</div>';
 }
 /* Trade taken opens New trade with the symbol, the ☀ Before chart and the Setup chart; once saved the card links to the trade */
 function wcTrade(k){return state.trades.find(function(t){return!t.deletedAt&&t.wcKey===k})||null}
@@ -1934,23 +2019,26 @@ ACT.wctrade=function(b){
     draft=freshDraft(syncDir(d));go('form');
   });
 };
-function wcCard(c,live){
+function wcCard(c,live,day){
   var k=wcKey(c.date,c.ticker),res=wcRes(c.result),rid=live?wcRowId(c.ticker):'';
-  return'<div class="panel wcard'+(c.aplus?' wlA':'')+'" data-rid="'+rid+'"><div class="wch"><button class="btn link" data-act="wlhist" data-t="'+esc(c.ticker)+'" style="padding:0;font-size:16px;font-weight:600" title="See history">'+esc(c.ticker)+'</button>'+(c.aplus?'<span class="pill win">A+</span>':'')+'<span class="k">'+esc(wcSetup(c)||'No setup marked')+'</span>'+(c.earn?'<span class="pill '+(c.ecls||'even')+'">Earnings '+esc(c.earn)+'</span>':'')+(live?'':'<span class="k" style="margin-left:auto">'+esc(wlLongDate(c.date))+'</span>')+wcTradeHtml(c,k,live)+'<button class="btn sm" data-act="wccopy" data-ck="'+esc(k)+'">Copy image</button></div>'+
+  return'<div class="panel wcard'+(c.aplus?' wlA':'')+'" data-rid="'+rid+'"><div class="wch"><button class="btn link" data-act="wlhist" data-t="'+esc(c.ticker)+'" style="padding:0;font-size:16px;font-weight:600" title="See history">'+esc(c.ticker)+'</button>'+(c.aplus?'<span class="pill win">A+</span>':'')+'<span class="k">'+esc(wcSetup(c)||'No setup marked')+'</span>'+(c.earn?'<span class="pill '+(c.ecls||'even')+'">Earnings '+esc(c.earn)+'</span>':'')+(live||day?'':'<span class="k" style="margin-left:auto">'+esc(wlLongDate(c.date))+'</span>')+wcTradeHtml(c,k,live||day)+'<button class="btn sm" data-act="wccopy" data-ck="'+esc(k)+'">Copy image</button></div>'+
     '<div class="wcimgs wc3">'+wcBox(c,'setup')+wcBox(c,'pre')+wcBox(c,'post')+'</div>'+
     '<div class="wcn"><label class="f"><span>☀ Plan</span>'+(rid?'<input data-wlf="waiting" data-id="'+rid+'" value="'+esc(c.plan||'')+'" placeholder="What has to happen first" autocomplete="off">':'<div class="wcplan">'+(c.plan?esc(c.plan):'<span class="mut">No plan written</span>')+'</div>')+'</label>'+
     '<label class="f"><span>☾ After</span><input data-wca="after" data-ck="'+esc(k)+'" value="'+esc(c.after||'')+'" placeholder="What actually happened" autocomplete="off"></label>'+
     '<label class="f wcres"><span>Plan result</span><select data-wca="result" data-ck="'+esc(k)+'"'+(res?' style="color:var(--'+res[2]+')"':'')+'><option value="">—</option>'+WC_RES.map(function(o){return'<option value="'+o[0]+'"'+(c.result===o[0]?' selected':'')+'>'+o[1]+'</option>'}).join('')+'</select></label></div></div>';
 }
+/* the date picker at the top shows that day's cards; today's cards follow the table live */
 function wcSection(){
-  var t=today(),tc=wcFor(t),sc=wcScoreText();
-  var h='<div class="curvehead" style="margin-top:24px"><h2 style="margin:0">Today\'s charts</h2>'+(sc?'<span class="k">'+esc(sc)+'</span>':'')+'</div>';
-  h+=tc.length?'<div class="wcards">'+tc.map(function(c){return wcCard(c,true)}).join('')+'</div>':'<p class="mut">Set a ticker to Add and its card appears here for the ☀ and ☾ charts.</p>';
+  var t=today(),d=wlUI.pd&&wlUI.pd<t?wlUI.pd:t,live=d===t,tc=wcFor(d);
+  var days={};wcAll().forEach(function(c){if(c.added&&c.date<t)days[c.date]=(days[c.date]||0)+1});
+  var dsel='<select data-wcday="1" aria-label="Day" style="width:auto;padding:4px 8px;font-size:13px"><option value="">Today</option>'+Object.keys(days).sort().reverse().map(function(x){return'<option value="'+x+'"'+(x===d?' selected':'')+'>'+DAYN[new Date(x+'T12:00:00').getDay()]+' '+md(x)+' · '+plural(days[x],'card')+'</option>'}).join('')+'</select>';
+  var h='<div class="curvehead wchead"><div class="wcdays"><h2 style="margin:0">'+(live?'Today\'s charts':esc(wlLongDate(d))+' charts')+'</h2>'+dsel+'</div>'+wcSummary()+'</div>';
+  h+=tc.length?'<div class="wcards">'+tc.map(function(c){return wcCard(c,live,!live)}).join('')+'</div>':'<p class="mut">'+(live?'Set a ticker to Add and its card appears here for the charts.':'No cards saved for this day.')+'</p>';
   return h;
 }
 function wcHistPanel(){
   var tk=wlUI.hist,hs=wcHist(tk);
-  return'<div class="wlhist"><div class="wlhp" role="dialog" aria-label="'+esc(tk)+' history"><div class="top"><div><h1>'+esc(tk)+' history</h1><p class="sub">'+plural(hs.length,'day')+' on your list · charts are kept 14 days, text is kept for good</p></div><button class="btn" data-act="wlhistclose">Close</button></div>'+
+  return'<div class="wlhist"><div class="wlhp" role="dialog" aria-label="'+esc(tk)+' history"><div class="top"><div><h1>'+esc(tk)+' history</h1><p class="sub">'+plural(hs.length,'day')+' in the last 7 days · older cards are deleted, their results stay in the summary line</p></div><button class="btn" data-act="wlhistclose">Close</button></div>'+
     (hs.length?'<div class="wcards">'+hs.map(function(c){return wcCard(c,false)}).join('')+'</div>':'<p class="mut">Nothing yet. A card is saved each day you set this ticker to Add.</p>')+'</div></div>';
 }
 
@@ -2004,7 +2092,8 @@ document.addEventListener('input',function(e){
 document.addEventListener('change',function(e){
   var d=e.target.dataset;if(!d)return;
   if(d.wca==='result'){var c=wc.cards[d.ck];if(!c)return;c.result=e.target.value;wcSave();render();return}
-  if(d.wlpd!=null){wlUI.pd=e.target.value||today();wlUI.cq=null;render()}
+  if(d.wcday!=null){wlUI.pd=e.target.value;wlUI.cq=null;wlUI.tgt=null;render();return}
+  if(d.wcper!=null){wlUI.per=e.target.value;render()}
 });
 
 /* ---------- Copy text for Discord (split into parts over 2,000 characters) ---------- */
@@ -2052,7 +2141,7 @@ ACT.wlcopy=function(){
 };
 
 
-/* ---------- Copy image for one watchlist card (☀ Before and ☾ After side by side, Setup wide below) ---------- */
+/* ---------- Copy image for one watchlist card (Setup wide on top, ☀ Before and ☾ After side by side) ---------- */
 async function watchCardImage(c){
   await cardFonts();
   var res=wcRes(c.result),slots=[['SETUP',c.setup],['☀ BEFORE',c.pre],['☾ AFTER',c.post]].filter(function(x){return x[1]});
@@ -2063,8 +2152,8 @@ async function watchCardImage(c){
   cardFont(ctx,28,400,0);
   var noteLines=notes.map(function(n){return wrapLines(ctx,n[1],W-2*P).slice(0,3)});
   var notesH=notes.reduce(function(a,n,i){return a+40+noteLines[i].length*40+10},0);
-  /* rows: before and after side by side, then the setup chart full width under them */
-  var pair=slots.filter(function(x){return x[0]!=='SETUP'}),st=slots.filter(function(x){return x[0]==='SETUP'}),rows=(pair.length?[pair]:[]).concat(st.length?[st]:[]);
+  /* rows: the setup chart full width, then before and after side by side under it */
+  var pair=slots.filter(function(x){return x[0]!=='SETUP'}),st=slots.filter(function(x){return x[0]==='SETUP'}),rows=(st.length?[st]:[]).concat(pair.length?[pair]:[]);
   rows=rows.map(function(r){var two=r.length===2,bw=two?(W-2*P-GAP)/2:W-2*P,bh=Math.min(two?560:(rows.length>1?620:820),Math.max.apply(null,r.map(function(x){return bw*x[2].height/x[2].width})));return{s:r,bw:bw,bh:bh}});
   var H=HEAD+56+notesH+rows.reduce(function(a,r){return a+44+r.bh+24},0)+P;
   cv.width=W;cv.height=H;cardBase(ctx,W,H,P+70,110);

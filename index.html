@@ -1730,7 +1730,7 @@ function wlTr(r){
     '<td>'+wlDD(r,'at','wsat',WL_ATS,!can)+(r.at==='Fail'&&can?' <button class="btn link" data-act="wlfailclear" data-id="'+id+'">Clear setup</button>':'')+'</td>'+
     '<td class="wlwtd"><input class="wlwt" data-wlf="waiting" data-id="'+id+'" autocomplete="off" value="'+esc(r.waiting)+'" placeholder="What has to happen first" aria-label="Waiting for, '+esc(r.ticker)+'"></td>'+
     '<td style="white-space:nowrap"><select class="wspk" data-wls="pick" data-id="'+id+'" style="color:'+(st==='add'?'var(--win)':st==='pass'?'var(--muted)':'inherit')+'" aria-label="Today, '+esc(r.ticker)+'"><option value="">—</option><option value="add"'+(st==='add'?' selected':'')+'>Add</option><option value="pass"'+(st==='pass'?' selected':'')+'>Pass</option></select> <span class="wlap">'+wlApHtml(r)+'</span>'+wlTodayExtra(r,st,fresh)+'</td>'+
-    '<td style="text-align:right"><button class="icon" data-act="wldel" data-id="'+id+'" aria-label="Remove '+esc(r.ticker)+'">'+ICON.trash+'</button></td></tr>';
+    '<td style="text-align:right;white-space:nowrap">'+(wlHasSetup(r)?'<button class="icon" data-act="wlclear" data-id="'+id+'" aria-label="Clear the setup for '+esc(r.ticker)+'" title="Clear setup">'+WL_ERASE+'</button>':'')+'<button class="icon" data-act="wldel" data-id="'+id+'" aria-label="Remove '+esc(r.ticker)+'">'+ICON.trash+'</button></td></tr>';
 }
 function wlTodayExtra(r,st,fresh){
   if(st==='add'){var c=wc.cards[wcKey(today(),r.ticker)]||{};return' <span class="wlci'+(c.pre?' on':'')+'" title="Pre-market chart '+(c.pre?'added':'missing')+'">☀</span><span class="wlci'+(c.post?' on':'')+'" title="After-close chart '+(c.post?'added':'missing')+'">☾</span>'}
@@ -1753,6 +1753,7 @@ function wlHelp(){
     ['Daily routine','Set each ticker to Add or Pass in the Today column. Setups carry over from day to day; Add and Pass reset each morning.'],
     ['Keyboard','↑ ↓ select a row · 1–4 direction · D DBL break · L level · 5–8 at level · W waiting for · A add · P pass · Enter or Esc leaves a field.'],
     ['Earnings','Green: 2–5 trading days away. Red: today or tomorrow (☀ before the open counts one day earlier). Weekends and market holidays are skipped.'],
+    ['Clearing a setup','The morning after a card gets Worked, Missed or Failed, that row\'s direction, DBL break, level, at level and plan are cleared. Not yet and Didn\'t trigger carry over. The eraser on a row clears it any time; that day\'s card keeps the plan.'],
     ['Charts','Click the ☀ or ☾ box on a card, then paste with Ctrl+V. If no box is selected, the paste goes to ☀ before 9:30am and ☾ after 4pm. Cards and charts sync to your account and are deleted after 7 days. Plan results stay in the summary line.'],
     ['History','Click a ticker name to see its past plans, charts and results.'],
     ['Sharing','Copy text posts the day summary to Discord. Copy image on a card shares that ticker with its charts.']
@@ -1762,7 +1763,7 @@ function wlHelp(){
 VIEWS.watchlist=function(){
   wlEnsure();
   if(!wl)return'<div class="top"><div><h1>Watchlist</h1></div></div><p class="mut">Loading…</p>';
-  wcLive();var t=today(),day=wlDay(),list=wlList(),N=wl.rows.length;
+  wlAutoClear();wcLive();var t=today(),day=wlDay(),list=wlList(),N=wl.rows.length;
   if(!list.some(function(r){return r.id===wlUI.sel})){var u=list.find(function(r){return r.checked!==t})||list[0];wlUI.sel=u?u.id:null}
   function count(fn){return wl.rows.filter(fn).length}
   var nChk=count(function(r){return r.checked===t}),nAdd=count(function(r){return wlPick(r)==='add'}),nPass=count(function(r){return wlPick(r)==='pass'}),nAp=count(function(r){return wlAplus(r)&&r.checked===t});
@@ -1800,6 +1801,35 @@ function wlMove(d){var list=wlList();if(!list.length)return;var i=list.findIndex
 
 ACT.wldecide=function(b){if(b.dataset.id)wlUI.sel=b.dataset.id;wlDecide(b.dataset.v)};
 ACT.wlclearpick=function(b){var r=wlById(b.dataset.id);if(!r)return;r.pick='';r.pickDate='';r.updatedAt=Date.now();wlUI.sel=r.id;wlPersist();render()};
+/* ---------- clearing a row's setup (direction, DBL break, level, at level, waiting for) ---------- */
+var WL_SETUP=['dir','dbl','level','at','waiting'];
+var WL_ERASE='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7"/><path d="m5 11 9 9"/></svg>';
+function wlHasSetup(r){return WL_SETUP.some(function(f){return String(r[f]||'').trim()})}
+function wlTake(r){var o={};WL_SETUP.forEach(function(f){o[f]=r[f]||''});return o}
+function wlWipe(r){WL_SETUP.forEach(function(f){r[f]=''});r.updatedAt=Date.now()}
+function wlPut(r,o){WL_SETUP.forEach(function(f){r[f]=o[f]});r.updatedAt=Date.now()}
+/* today's card keeps the plan it had when the row is cleared by hand */
+function wcFreeze(tk){var c=wc.cards[wcKey(today(),tk)];if(c)c.frozen=true}
+ACT.wlclear=function(b){
+  var r=wlById(b.dataset.id);if(!r)return;var old=wlTake(r);
+  wcFreeze(r.ticker);wlWipe(r);wlPersist();wcSave();render();
+  toast(r.ticker+' setup cleared',function(){wlPut(r,old);wlPersist();render()});
+};
+/* the morning after a Worked, Missed or Failed result, that row starts blank (Not yet and Didn't trigger carry over) */
+function wlAutoClear(){
+  var t=today();if(!wl||wc.autoClr===t)return;wc.autoClr=t;
+  var done=[];
+  wl.rows.forEach(function(r){
+    var c=wcHist(r.ticker).filter(function(x){return x.date<t})[0];if(!c||c.rowCleared)return;
+    if(!/^(worked|missed|failed)$/.test(c.result||''))return;
+    c.rowCleared=true;
+    var same=String(r.dir||'')===String(c.dir||'')&&String(r.dbl||'')===String(c.dbl||'')&&String(r.level||'')===String(c.level||'')&&String(r.at||'')===String(c.at||'')&&String(r.waiting||'')===String(c.plan||'');
+    if(same&&wlHasSetup(r))done.push({r:r,old:wlTake(r)});
+  });
+  if(!done.length){wcSave();return}
+  done.forEach(function(x){wlWipe(x.r)});wlPersist();wcSave();
+  setTimeout(function(){toast('Cleared '+plural(done.length,'finished setup')+' from yesterday',function(){done.forEach(function(x){wlPut(x.r,x.old)});wlPersist();render()},'Undo')},300);
+}
 ACT.wlfailclear=function(b){var r=wlById(b.dataset.id);if(!r)return;r.dbl='No';r.level='';r.at='';r.updatedAt=Date.now();wlPersist();render()};
 ACT.wlfilter=function(b){wlUI.f=b.dataset.v;wlUI.sel=null;render()};
 ACT.wlearn=function(){if(!(state.settings.fhKey||'').trim()){toast('Add your Finnhub key on the Account page first');return}wlEarnRefresh(true)};
@@ -1917,7 +1947,7 @@ function wcKey(d,t){return d+'|'+t}
 function wcCardSig(c){var x=Object.assign({},c);delete x.updatedAt;return JSON.stringify(x)}
 function wcStamp(){Object.keys(wc.cards).forEach(function(k){var sg=wcCardSig(wc.cards[k]);if(wcSig[k]!==sg){wcSig[k]=sg;wc.cards[k].updatedAt=Date.now()}})}
 function wcSave(){wcStamp();clearTimeout(wcT);wcT=setTimeout(function(){dbPut('kv','wlcards',JSON.parse(JSON.stringify(wc))).catch(function(){})},300);wcSchedule(2000)}
-function wcLoad(){return dbGet('kv','wlcards').then(function(s){if(s&&s.cards){wc.cards=s.cards;wc.days=s.days||{};wc.cleaned=s.cleaned||'';wc.done=s.done||{};wc.up=s.up||{};wc.del=s.del||[]}Object.keys(wc.cards).forEach(function(k){wcSig[k]=wcCardSig(wc.cards[k])});wcClean()},function(){})}
+function wcLoad(){return dbGet('kv','wlcards').then(function(s){if(s&&s.cards){wc.cards=s.cards;wc.days=s.days||{};wc.cleaned=s.cleaned||'';wc.done=s.done||{};wc.up=s.up||{};wc.del=s.del||[];wc.autoClr=s.autoClr||''}Object.keys(wc.cards).forEach(function(k){wcSig[k]=wcCardSig(wc.cards[k])});wcClean()},function(){})}
 /* results kept for the summary line after a card is deleted: w, m or f, with + for A+ */
 var WC_CODE={worked:'w',missed:'m',failed:'f'};
 function wcMonthOf(k){return k.slice(0,7)}
@@ -1945,7 +1975,8 @@ function wcLive(){
     var k=wcKey(t,r.ticker),c=wc.cards[k],add=wlPick(r)==='add';
     if(!c&&!add)return;
     if(!c){c=wc.cards[k]={date:t,ticker:r.ticker,after:'',result:'',pre:'',post:''};ch=true}
-    var e=wlEarn(r),snap={group:r.group,dir:r.dir,dbl:r.dbl,level:r.level,at:r.at,aplus:wlAplus(r),plan:r.waiting,earn:e?wlEarnText(r)+' · '+(e.n===0?'Today':e.n+'d'):'',ecls:e?e.cls:'',added:add};
+    if(c.frozen&&wlHasSetup(r)){c.frozen=false;ch=true}
+    var e=wlEarn(r),snap=c.frozen?{group:r.group,earn:e?wlEarnText(r)+' · '+(e.n===0?'Today':e.n+'d'):'',ecls:e?e.cls:'',added:add}:{group:r.group,dir:r.dir,dbl:r.dbl,level:r.level,at:r.at,aplus:wlAplus(r),plan:r.waiting,earn:e?wlEarnText(r)+' · '+(e.n===0?'Today':e.n+'d'):'',ecls:e?e.cls:'',added:add};
     Object.keys(snap).forEach(function(f){if(c[f]!==snap[f]){c[f]=snap[f];ch=true}});
   });
   var d=wlDay(),dn={news:d.news||'',newsNote:d.newsNote||'',earnNote:d.earnNote||'',earnList:wlEarnWeek().map(function(r){var e=wlEarn(r);return{t:r.ticker+' '+wlEarnText(r),c:e?e.cls:''}}),mkt:wlMkt()};

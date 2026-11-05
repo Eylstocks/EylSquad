@@ -1508,7 +1508,7 @@ document.head.insertAdjacentHTML('beforeend','<style>'+
 '</style>');
 
 /* ---------- settings ---------- */
-var WL_DEF=[['Market','SPY'],['Market','QQQ'],['Market','IWM'],['Market','DIA'],['Market','TLT'],['Market','VIX'],['Leveraged','SQQQ'],['Mega-cap','AAPL'],['Mega-cap','AMZN'],['Mega-cap','GOOGL'],['Mega-cap','META'],['Mega-cap','MSFT'],['Mega-cap','NFLX'],['Mega-cap','TSLA'],['Semis','AMD'],['Semis','INTC'],['Semis','MU'],['Semis','NVDA'],['Crypto','COIN'],['Crypto','GBTC'],['Crypto','MARA'],['Crypto','MSTR'],['Crypto','RIOT'],['Energy','XLE'],['Finance','XLF'],['China','BABA']];
+var WL_DEF=[['Market','SPY'],['Market','QQQ'],['Market','IWM'],['Market','TLT'],['Market','VIX'],['Leveraged','SQQQ'],['Mega-cap','AAPL'],['Mega-cap','AMZN'],['Mega-cap','GOOGL'],['Mega-cap','META'],['Mega-cap','MSFT'],['Mega-cap','NFLX'],['Mega-cap','TSLA'],['Semis','AMD'],['Semis','INTC'],['Semis','MU'],['Semis','NVDA'],['Crypto','COIN'],['Crypto','GBTC'],['Crypto','MARA'],['Crypto','MSTR'],['Crypto','RIOT'],['Energy','XLE'],['Finance','XLF'],['China','BABA']];
 var WL_DIRS=[['up','Uptrend'],['down','Downtrend'],['rup','Reversal ↑'],['rdown','Reversal ↓']];
 var WL_DBLS=[['Yes','Yes'],['No','No']];
 var WL_ATS=[['No','No'],['Near','Near'],['Yes','Yes'],['Fail','Fail']];
@@ -1521,7 +1521,10 @@ var wlFsP=null,wlSyncBusy=false,wlSyncAgain=false,wlSyncT=null;
 /* ---------- data ---------- */
 function today(){return nyNow().date}
 function wlRow(g,t){return{id:'r_'+t,group:g,ticker:t,dir:'',dbl:'',level:'',at:'',waiting:'',checked:'',pick:'',pickDate:'',earnDate:'',earnHour:'',earnManual:false,updatedAt:0}}
-function wlSort(a,b){return a.group.localeCompare(b.group)||a.ticker.localeCompare(b.ticker)}
+/* fixed display order whatever order the rows were saved or synced in: built-in groups and tickers first, then added ones A-Z */
+function wlRank(list,v){var i=list.indexOf(v);return i<0?1e6:i}
+var WL_GORDER=WL_DEF.map(function(p){return p[0]}).filter(function(g,i,a){return a.indexOf(g)===i}),WL_TORDER=WL_DEF.map(function(p){return p[1]});
+function wlSort(a,b){return wlRank(WL_GORDER,a.group)-wlRank(WL_GORDER,b.group)||a.group.localeCompare(b.group)||wlRank(WL_TORDER,a.ticker)-wlRank(WL_TORDER,b.ticker)||a.ticker.localeCompare(b.ticker)}
 function wlDefault(){return{rows:WL_DEF.map(function(p){return wlRow(p[0],p[1])}),day:null,purged:{}}}
 function wlNorm(r){
   var at=r.at==='Approaching'?'Near':r.at;if(['No','Near','Yes','Fail'].indexOf(at)<0)at='';
@@ -1554,7 +1557,7 @@ window.wlPlanFor=function(sym,onReady){
 function wlDay(){var t=today();if(!wl.day||wl.day.date!==t)wl.day={date:t,news:'',newsNote:'',earn:'',earnNote:'',updatedAt:0};return wl.day}
 function wlList(){
   var t=today();
-  return wl.rows.filter(function(r){
+  return wl.rows.slice().sort(wlSort).filter(function(r){
     var p=wlPick(r);
     if(wlUI.f==='skipped')return p==='pass';
     if(p==='pass')return false;
@@ -1837,6 +1840,7 @@ ACT.wleadd=function(b){wlUI.edE=b.dataset.id;wlUI.sel=b.dataset.id;render();var 
 ACT.wldayset=function(b){var d=wlDay(),k=b.dataset.k,v=b.dataset.v;d[k]=d[k]===v?'':v;if(d[k]!=='Yes')d[k+'Note']='';d.updatedAt=Date.now();wlPersist();render()};
 ACT.wladd=function(){
   var t=$('[data-wl=ntick]').value.trim().toUpperCase(),g=$('[data-wl=ngrp]').value.trim()||'Other';if(!t)return;
+  var same=wl.rows.find(function(x){return x.group.toLowerCase()===g.toLowerCase()});if(same)g=same.group;
   if(wl.rows.some(function(x){return x.ticker===t})){toast(t+' is already on the list');return}
   var r=wlRow(g,t);r.updatedAt=Date.now();if(wl.purged)delete wl.purged[r.id];
   wl.rows.push(r);wl.rows.sort(wlSort);wlUI.sel=r.id;wlPersist();render();

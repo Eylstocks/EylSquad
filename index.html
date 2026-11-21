@@ -1509,10 +1509,10 @@ document.head.insertAdjacentHTML('beforeend','<style>'+
 
 /* ---------- settings ---------- */
 var WL_DEF=[['Market','SPY'],['Market','QQQ'],['Market','IWM'],['Market','TLT'],['Market','VIX'],['Leveraged','SQQQ'],['Mega-cap','AAPL'],['Mega-cap','AMZN'],['Mega-cap','GOOGL'],['Mega-cap','META'],['Mega-cap','MSFT'],['Mega-cap','NFLX'],['Mega-cap','TSLA'],['Semis','AMD'],['Semis','INTC'],['Semis','MU'],['Semis','NVDA'],['Crypto','COIN'],['Crypto','GBTC'],['Crypto','MARA'],['Crypto','MSTR'],['Crypto','RIOT'],['Energy','XLE'],['Finance','XLF'],['China','BABA']];
-var WL_DIRS=[['up','Uptrend'],['down','Downtrend'],['rup','Reversal ↑'],['rdown','Reversal ↓']];
+var WL_DIRS=[['up','Bullish Cont'],['down','Bearish Cont'],['rup','Bullish Rev'],['rdown','Bearish Rev']];
 var WL_DBLS=[['Yes','Yes'],['No','No']];
 var WL_ATS=[['No','No'],['Near','Near'],['Yes','Yes'],['Fail','Fail']];
-var WL_DIRL={up:'Uptrend',down:'Downtrend',rup:'Reversal ↑',rdown:'Reversal ↓'};
+var WL_DIRL={up:'Bullish Cont',down:'Bearish Cont',rup:'Bullish Rev',rdown:'Bearish Rev'};
 var WL_COL={dir:{up:'var(--win)',down:'var(--loss)',rup:'var(--warn)',rdown:'var(--warn)'},dbl:{Yes:'var(--win)'},at:{Yes:'var(--win)',Near:'var(--warn)',Fail:'var(--loss)'}};
 var WL_KEYS={'1':['dir','up'],'2':['dir','down'],'3':['dir','rup'],'4':['dir','rdown'],'5':['at','No'],'6':['at','Near'],'7':['at','Yes'],'8':['at','Fail']};
 var wl=null,wlReady=null,wlUI={f:'all',sel:null},wlT=null,wlCloud='';

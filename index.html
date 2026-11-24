@@ -1498,7 +1498,7 @@ document.head.insertAdjacentHTML('beforeend','<style>'+
 '.wcf{color:var(--accent);text-decoration:underline;cursor:pointer}'+
 '.wcx{position:absolute;top:6px;right:6px;border:0;border-radius:50%;width:24px;height:24px;background:var(--ink);color:var(--bg);cursor:pointer;opacity:0;font-size:15px;line-height:1}'+
 '.wcbox:hover .wcx,.wcx:focus{opacity:1}'+
-'.wcn{display:flex;gap:10px;margin-top:10px;flex-wrap:wrap}.wcn label{flex:1 1 220px}.wcn label.wcres{flex:0 0 170px}'+
+'.wcn{display:flex;gap:10px;margin-top:10px;flex-wrap:wrap}.wcn label{flex:1 1 220px}.wcn label.wcres{flex:0 0 170px}.wcn label.wctk{flex:0 0 90px}'+
 '.wcplan{padding:8px 0;font-size:14px;color:var(--ink)}'+
 '.wlhist{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:40;display:flex;justify-content:flex-end}'+
 '.wlhp{background:var(--bg);width:min(920px,100%);height:100%;overflow:auto;padding:22px}'+
@@ -1696,10 +1696,10 @@ async function wcSync(){
     snap.forEach(function(d){remote[d.id]=d.data()});
     Object.keys(remote).forEach(function(mo){
       var r=remote[mo]||{};
-      Object.keys(r.done||{}).forEach(function(k){var d=wc.done[mo]=wc.done[mo]||{};if(!d[k]){d[k]=r.done[k];changed=true}});
+      Object.keys(r.done||{}).forEach(function(k){var d=wc.done[mo]=wc.done[mo]||{};if(!d[k]){d[k]=wcNormCode(r.done[k]);changed=true}});
       Object.keys(r.cards||{}).forEach(function(k){
         var rc=r.cards[k],lc=wc.cards[k];if(wcIsDone(k)||!rc||rc.date<cut)return;
-        if(!lc||(rc.updatedAt||0)>(lc.updatedAt||0)){wc.cards[k]=rc;wcSig[k]=wcCardSig(rc);changed=true}
+        if(!lc||(rc.updatedAt||0)>(lc.updatedAt||0)){wcSig[k]=wcCardSig(rc);wc.cards[k]=wcNormCard(rc);changed=true}
       });
       Object.keys(r.days||{}).forEach(function(d){if(d>=cut&&!wc.days[d]){wc.days[d]=r.days[d];changed=true}});
     });
@@ -1756,7 +1756,8 @@ function wlHelp(){
     ['Daily routine','Set each ticker to Add or Pass in the Today column. Setups carry over from day to day; Add and Pass reset each morning.'],
     ['Keyboard','↑ ↓ select a row · 1–4 direction · D DBL break · L level · 5–8 at level · W waiting for · A add · P pass · Enter or Esc leaves a field.'],
     ['Earnings','Green: 2–5 trading days away. Red: today or tomorrow (☀ before the open counts one day earlier). Weekends and market holidays are skipped.'],
-    ['Clearing a setup','The morning after a card gets Worked, Missed or Failed, that row\'s direction, DBL break, level, at level and plan are cleared. Not yet and Didn\'t trigger carry over. The eraser on a row clears it any time; that day\'s card keeps the plan.'],
+    ['Plan result','Worked or Failed says if the setup was right. Taken says if you traded it. Not taken + Worked counts as Missed, Not taken + Failed counts as a Good skip. Taken is set to Yes on its own when you log the trade with Trade taken.'],
+    ['Clearing a setup','The morning after a card gets Worked or Failed, that row\'s direction, DBL break, level, at level and plan are cleared. Not yet and Didn\'t trigger carry over. The eraser on a row clears it any time; that day\'s card keeps the plan.'],
     ['Charts','Click the ☀ or ☾ box on a card, then paste with Ctrl+V. If no box is selected, the paste goes to ☀ before 9:30am and ☾ after 4pm. Cards and charts sync to your account and are deleted after 7 days. Plan results stay in the summary line.'],
     ['History','Click a ticker name to see its past plans, charts and results.'],
     ['Sharing','Copy text posts the day summary to Discord. Copy image on a card shares that ticker with its charts.']
@@ -1942,8 +1943,14 @@ ACT.restoreyes=function(){
 function wlDayName(d){var p=d.split('-');return['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][new Date(+p[0],+p[1]-1,+p[2]).getDay()]}
 function wlLongDate(d){var p=d.split('-');return wlDayName(d)+' '+(+p[1])+'/'+(+p[2])+'/'+p[0].slice(-2)}
 var wc={cards:{},days:{},cleaned:'',done:{},up:{},del:[]},wcT=null,wcSig={},wcSyncT=null,wcBusy=false,wcAgain=false;
-/* Missed: the setup worked but the trade was not taken. It counts as a working plan. */
-var WC_RES=[['worked','✓ Worked','win'],['missed','🎯 Missed','accent'],['failed','✗ Failed','loss'],['notyet','⏳ Not yet','warn'],['none','— Didn\'t trigger','even']];
+/* Plan result says if the setup was right; Taken says if you traded it. Not taken + Worked = Missed, Not taken + Failed = Good skip. */
+var WC_RES=[['worked','✓ Worked','win'],['failed','✗ Failed','loss'],['notyet','⏳ Not yet','warn'],['none','— Didn\'t trigger','even']];
+/* Taken is Yes on its own once the card is linked to a saved trade */
+function wcTaken(c,k){if(wcTrade(k||wcKey(c.date,c.ticker)))return'yes';return c.taken==='yes'||c.taken==='no'?c.taken:''}
+/* older cards used Missed as a result: it becomes Worked + Not taken */
+function wcNormCard(c){if(c&&c.result==='missed'){c.result='worked';c.taken='no'}return c}
+function wcNormCode(code){return code&&code.charAt(0)==='m'?'wn'+(code.indexOf('+')>-1?'+':''):code}
+function wcNormDone(){Object.keys(wc.done).forEach(function(mo){var d=wc.done[mo];Object.keys(d).forEach(function(k){d[k]=wcNormCode(d[k])})})}
 var WC_SLOTS={setup:'Setup · zoomed out',pre:'☀ Before',post:'☾ After'};
 function wcRes(v){return WC_RES.find(function(x){return x[0]===v})||null}
 function wcKey(d,t){return d+'|'+t}
@@ -1951,14 +1958,15 @@ function wcKey(d,t){return d+'|'+t}
 function wcCardSig(c){var x=Object.assign({},c);delete x.updatedAt;return JSON.stringify(x)}
 function wcStamp(){Object.keys(wc.cards).forEach(function(k){var sg=wcCardSig(wc.cards[k]);if(wcSig[k]!==sg){wcSig[k]=sg;wc.cards[k].updatedAt=Date.now()}})}
 function wcSave(){wcStamp();clearTimeout(wcT);wcT=setTimeout(function(){dbPut('kv','wlcards',JSON.parse(JSON.stringify(wc))).catch(function(){})},300);wcSchedule(2000)}
-function wcLoad(){return dbGet('kv','wlcards').then(function(s){if(s&&s.cards){wc.cards=s.cards;wc.days=s.days||{};wc.cleaned=s.cleaned||'';wc.done=s.done||{};wc.up=s.up||{};wc.del=s.del||[];wc.autoClr=s.autoClr||''}Object.keys(wc.cards).forEach(function(k){wcSig[k]=wcCardSig(wc.cards[k])});wcClean()},function(){})}
-/* results kept for the summary line after a card is deleted: w, m or f, with + for A+ */
-var WC_CODE={worked:'w',missed:'m',failed:'f'};
+function wcLoad(){return dbGet('kv','wlcards').then(function(s){if(s&&s.cards){wc.cards=s.cards;wc.days=s.days||{};wc.cleaned=s.cleaned||'';wc.done=s.done||{};wc.up=s.up||{};wc.del=s.del||[];wc.autoClr=s.autoClr||''}wcNormDone();Object.keys(wc.cards).forEach(function(k){wcSig[k]=wcCardSig(wc.cards[k]);wcNormCard(wc.cards[k])});wcClean()},function(){})}
+/* results kept for the summary line after a card is deleted: w or f, then t (taken) or n (not taken) if set, then + for A+ */
+var WC_CODE={worked:'w',failed:'f'};
+function wcCodeOf(c,k){var r=c.added&&WC_CODE[c.result];if(!r)return'';var tk=wcTaken(c,k);return r+(tk==='yes'?'t':tk==='no'?'n':'')+(c.aplus?'+':'')}
 function wcMonthOf(k){return k.slice(0,7)}
 function wcIsDone(k){var d=wc.done[wcMonthOf(k)];return!!(d&&d[k])}
 function wcArchive(k){
-  var c=wc.cards[k];if(!c)return;var mo=wcMonthOf(k),code=c.added&&WC_CODE[c.result];
-  if(code){(wc.done[mo]=wc.done[mo]||{})[k]=code+(c.aplus?'+':'')}
+  var c=wc.cards[k];if(!c)return;var mo=wcMonthOf(k),code=wcCodeOf(c,k);
+  if(code){(wc.done[mo]=wc.done[mo]||{})[k]=code}
   ['setup','pre','post'].forEach(function(sl){var id=c[sl];if(!id)return;dbDel('img',id).catch(function(){});if(urlCache[id]){URL.revokeObjectURL(urlCache[id]);delete urlCache[id]}if(wc.up[id]){wc.del.push(id);delete wc.up[id]}});
   delete wc.cards[k];delete wcSig[k];
 }
@@ -1994,12 +2002,17 @@ function wcOpenPlan(r){var t=today(),l=wcHist(r.ticker).filter(function(c){retur
 /* plan results by month: kept results plus this week's cards */
 function wcMonths(){
   var out={};
-  function add(mo,code){var g=out[mo]=out[mo]||{w:0,m:0,f:0,aw:0,af:0},r=code.charAt(0),ap=code.charAt(1)==='+';g[r]++;if(ap){if(r==='f')g.af++;else g.aw++}}
+  function add(mo,code){
+    code=wcNormCode(code);var g=out[mo]=out[mo]||{w:0,f:0,tw:0,tf:0,nw:0,nf:0,aw:0,af:0},r=code.charAt(0),tk=code.charAt(1),ap=code.indexOf('+')>-1;
+    if(r!=='w'&&r!=='f')return;g[r]++;
+    if(tk==='t')g['t'+r]++;else if(tk==='n')g['n'+r]++;
+    if(ap){if(r==='f')g.af++;else g.aw++}
+  }
   Object.keys(wc.done).forEach(function(mo){Object.keys(wc.done[mo]).forEach(function(k){add(mo,wc.done[mo][k])})});
-  Object.keys(wc.cards).forEach(function(k){var c=wc.cards[k],code=c.added&&WC_CODE[c.result];if(code&&!wcIsDone(k))add(wcMonthOf(k),code+(c.aplus?'+':''))});
+  Object.keys(wc.cards).forEach(function(k){var code=wcCodeOf(wc.cards[k],k);if(code&&!wcIsDone(k))add(wcMonthOf(k),code)});
   return out;
 }
-function wcPctOf(g){var n=g.w+g.m+g.f;return n?Math.round((g.w+g.m)/n*100):null}
+function wcPctOf(g){var n=g.w+g.f;return n?Math.round(g.w/n*100):null}
 function wcMonLabel(mo,withYear){var n=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+mo.slice(5)-1];return withYear?n+' '+mo.slice(0,4):n}
 function wcPerOptions(M){
   var cm=today().slice(0,7),cy=cm.slice(0,4),per=wlUI.per||'month',mos=Object.keys(M).filter(function(m){return m!==cm}).sort().reverse(),yrs={};
@@ -2016,15 +2029,19 @@ function wcSummary(){
   else if(per==='all')inScope=function(){return true};
   else if(per.charAt(0)==='M')inScope=function(m){return m===per.slice(1)};
   else inScope=function(m){return m.slice(0,4)===per.slice(1)};
-  var mos=Object.keys(M).filter(inScope),g={w:0,m:0,f:0,aw:0,af:0};
-  mos.forEach(function(m){['w','m','f','aw','af'].forEach(function(x){g[x]+=M[m][x]})});
+  var K=['w','f','tw','tf','nw','nf','aw','af'],mos=Object.keys(M).filter(inScope),g={};K.forEach(function(x){g[x]=0});
+  mos.forEach(function(m){K.forEach(function(x){g[x]+=M[m][x]||0})});
   var sel='<select data-wcper="1" aria-label="Plan results period" style="width:auto;padding:4px 8px;font-size:13px">'+wcPerOptions(M)+'</select>';
-  var n=g.w+g.m+g.f,txt;
+  var n=g.w+g.f,tk=g.tw+g.tf,txt;
   if(!n)txt='<span class="mut">No plan results yet</span>';
   else{
-    txt=g.w+' worked · '+g.m+' missed · '+g.f+' failed · setups right <b>'+wcPctOf(g)+'%</b>'+(g.aw+g.af?' · A+ '+g.aw+'/'+(g.aw+g.af):'');
+    txt=g.w+' worked · '+g.f+' failed · setups right <b>'+wcPctOf(g)+'%</b>'+
+      (tk?' · <span title="Setups you traded">Taken '+tk+' ('+g.tw+' worked)</span>':'')+
+      (g.nw?' · <span class="loss" title="Not taken, and the setup worked">Missed '+g.nw+'</span>':'')+
+      (g.nf?' · <span class="win" title="Not taken, and the setup failed">Good skips '+g.nf+'</span>':'')+
+      (g.aw+g.af?' · A+ '+g.aw+'/'+(g.aw+g.af):'');
     if(per==='year'||per==='all'||per.charAt(0)==='Y'){
-      var q=mos.filter(function(m){var x=M[m];return x.w+x.m+x.f>=5}).sort(function(a,b){return wcPctOf(M[b])-wcPctOf(M[a])||a.localeCompare(b)});
+      var q=mos.filter(function(m){var x=M[m];return x.w+x.f>=5}).sort(function(a,b){return wcPctOf(M[b])-wcPctOf(M[a])||a.localeCompare(b)});
       if(q.length>=2){var yr=per==='all';txt+=' · Best: '+wcMonLabel(q[0],yr)+' '+wcPctOf(M[q[0]])+'% · Worst: '+wcMonLabel(q[q.length-1],yr)+' '+wcPctOf(M[q[q.length-1]])+'%'}
     }
   }
@@ -2065,7 +2082,8 @@ function wcCard(c,live,day){
     '<div class="wcimgs wc3">'+wcBox(c,'setup')+wcBox(c,'pre')+wcBox(c,'post')+'</div>'+
     '<div class="wcn"><label class="f"><span>☀ Plan</span>'+(rid?'<input data-wlf="waiting" data-id="'+rid+'" value="'+esc(c.plan||'')+'" placeholder="What has to happen first" autocomplete="off">':'<div class="wcplan">'+(c.plan?esc(c.plan):'<span class="mut">No plan written</span>')+'</div>')+'</label>'+
     '<label class="f"><span>☾ After</span><input data-wca="after" data-ck="'+esc(k)+'" value="'+esc(c.after||'')+'" placeholder="What actually happened" autocomplete="off"></label>'+
-    '<label class="f wcres"><span>Plan result</span><select data-wca="result" data-ck="'+esc(k)+'"'+(res?' style="color:var(--'+res[2]+')"':'')+'><option value="">—</option>'+WC_RES.map(function(o){return'<option value="'+o[0]+'"'+(c.result===o[0]?' selected':'')+'>'+o[1]+'</option>'}).join('')+'</select></label></div></div>';
+    '<label class="f wcres"><span>Plan result</span><select data-wca="result" data-ck="'+esc(k)+'"'+(res?' style="color:var(--'+res[2]+')"':'')+'><option value="">—</option>'+WC_RES.map(function(o){return'<option value="'+o[0]+'"'+(c.result===o[0]?' selected':'')+'>'+o[1]+'</option>'}).join('')+'</select></label>'+
+    '<label class="f wctk"><span>Taken</span>'+(wcTrade(k)?'<div class="wcplan" title="Linked to a saved trade">Yes</div>':'<select data-wca="taken" data-ck="'+esc(k)+'"><option value="">—</option>'+[['yes','Yes'],['no','No']].map(function(o){return'<option value="'+o[0]+'"'+(c.taken===o[0]?' selected':'')+'>'+o[1]+'</option>'}).join('')+'</select>')+'</label></div></div>';
 }
 /* the date picker at the top shows that day's cards; today's cards follow the table live */
 function wcSection(){
@@ -2132,6 +2150,7 @@ document.addEventListener('input',function(e){
 document.addEventListener('change',function(e){
   var d=e.target.dataset;if(!d)return;
   if(d.wca==='result'){var c=wc.cards[d.ck];if(!c)return;c.result=e.target.value;wcSave();render();return}
+  if(d.wca==='taken'){var ct=wc.cards[d.ck];if(!ct)return;ct.taken=e.target.value;wcSave();render();return}
   if(d.wcday!=null){wlUI.pd=e.target.value;wlUI.cq=null;wlUI.tgt=null;render();return}
   if(d.wcper!=null){wlUI.per=e.target.value;render()}
 });
@@ -2151,7 +2170,8 @@ function wcTextParts(d){
     if(c.earn)su+=(su?' · ':'')+'Earnings '+c.earn;
     var l=[dot+'**'+c.ticker+'**'+(c.aplus?' `A+`':'')+(su?' — '+wcEsc(su):'')];
     l.push('↳ Plan: '+(c.plan?wcEsc(c.plan):'—'));
-    if(c.after||res)l.push('↳ After: '+(c.after?wcEsc(c.after):'—')+(res?' · **'+res[1]+'**':''));
+    var tk=wcTaken(c);
+    if(c.after||res||tk)l.push('↳ After: '+(c.after?wcEsc(c.after):'—')+(res?' · **'+res[1]+'**':'')+(tk==='yes'?' · Taken':tk==='no'?' · Not taken':''));
     blocks.push(l.join('\n'));
   });
   var parts=[],cur=head.join('\n');

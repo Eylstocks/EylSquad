@@ -1555,9 +1555,11 @@ window.wlPlanFor=function(sym,onReady){
   return r&&wlPick(r)==='add'&&String(r.waiting||'').trim()?r.waiting.trim():null;
 };
 function wlDay(){var t=today();if(!wl.day||wl.day.date!==t)wl.day={date:t,news:'',newsNote:'',earn:'',earnNote:'',updatedAt:0};return wl.day}
+/* table order: by group (default) or A-Z; the choice is kept on this device */
+function wlAZ(){return state.settings.wlOrder==='az'}
 function wlList(){
   var t=today();
-  return wl.rows.slice().sort(wlSort).filter(function(r){
+  return wl.rows.slice().sort(wlAZ()?function(a,b){return a.ticker.localeCompare(b.ticker)}:wlSort).filter(function(r){
     var p=wlPick(r);
     if(wlUI.f==='skipped')return p==='pass';
     if(p==='pass')return false;
@@ -1773,10 +1775,11 @@ VIEWS.watchlist=function(){
   var nChk=count(function(r){return r.checked===t}),nAdd=count(function(r){return wlPick(r)==='add'}),nPass=count(function(r){return wlPick(r)==='pass'}),nAp=count(function(r){return wlAplus(r)&&r.checked===t});
   var h='<div class="top"><div><h1>Watchlist</h1><p class="sub">'+(N&&nChk===N?'<span class="win">All '+N+' checked today ✓</span>':nChk+' of '+N+' checked today')+' · '+nAdd+' on today\'s list'+(nAp?' · <span class="win">'+nAp+' A+</span>':'')+'<span id="wlcloud">'+(wlCloud?' · '+esc(wlCloud):'')+'</span></p></div><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button class="btn" data-act="wlearn">Refresh earnings</button><button class="btn" data-act="wlcopy" title="Copy a text summary of the day shown below for Discord">'+(wlUI.cq&&wlUI.cq.d===(wlUI.pd||t)?'Copy part '+(wlUI.cq.i+1)+' of '+wlUI.cq.parts.length:'Copy text')+'</button></div></div>';
   h+='<div class="panel" style="padding:10px 18px;margin-bottom:14px">'+wlDayRow('Any major news?','news',day)+wlEarnRow()+'</div>';
-  h+='<div class="seg" style="margin-bottom:10px" role="group" aria-label="Filter">'+[['all','All',N-nPass],['today','Today\'s list',nAdd],['unchecked','Not checked',N-nChk],['skipped','Skipped',nPass]].map(function(c){return'<button class="chip'+(wlUI.f===c[0]?' on':'')+'" data-act="wlfilter" data-v="'+c[0]+'">'+c[1]+' ('+c[2]+')</button>'}).join('')+'</div>';
+  h+='<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px"><div class="seg" role="group" aria-label="Filter">'+[['all','All',N-nPass],['today','Today\'s list',nAdd],['unchecked','Not checked',N-nChk],['skipped','Skipped',nPass]].map(function(c){return'<button class="chip'+(wlUI.f===c[0]?' on':'')+'" data-act="wlfilter" data-v="'+c[0]+'">'+c[1]+' ('+c[2]+')</button>'}).join('')+'</div>'+
+    '<div class="seg" role="group" aria-label="Sort">'+[['group','By group'],['az','A-Z']].map(function(o){var on=(o[0]==='az')===wlAZ();return'<button class="chip'+(on?' on':'')+'" data-act="wlorder" data-v="'+o[0]+'" aria-pressed="'+on+'">'+o[1]+'</button>'}).join('')+'</div></div>';
   h+='<div class="panel tablewrap"><table class="tbl wlt"><thead><tr><th>Ticker</th><th>Earnings</th><th>Direction</th><th>DBL break</th><th>Level</th><th>At level</th><th>Waiting for</th><th>Today</th><th></th></tr></thead><tbody>';
   var lastG=null;
-  list.forEach(function(r){if(r.group!==lastG){lastG=r.group;h+='<tr class="gh"><td colspan="9">'+esc(r.group)+'</td></tr>'}h+=wlTr(r)});
+  list.forEach(function(r){if(!wlAZ()&&r.group!==lastG){lastG=r.group;h+='<tr class="gh"><td colspan="9">'+esc(r.group)+'</td></tr>'}h+=wlTr(r)});
   if(!list.length)h+='<tr><td colspan="9" class="mut" style="text-align:center;padding:24px">'+({today:'Nothing added yet. Press Add on a ticker.',unchecked:'Everything is checked for today ✓',skipped:'Nothing passed today.'}[wlUI.f]||'No tickers yet.')+'</td></tr>';
   h+='</tbody></table></div>';
   var gs=Array.from(new Set(wl.rows.map(function(r){return r.group})));
@@ -1835,6 +1838,7 @@ function wlAutoClear(){
   setTimeout(function(){toast('Cleared '+plural(done.length,'finished setup')+' from yesterday',function(){done.forEach(function(x){wlPut(x.r,x.old)});wlPersist();render()},'Undo')},300);
 }
 ACT.wlfailclear=function(b){var r=wlById(b.dataset.id);if(!r)return;r.dbl='No';r.level='';r.at='';r.updatedAt=Date.now();wlPersist();render()};
+ACT.wlorder=function(b){state.settings.wlOrder=b.dataset.v==='az'?'az':'';save();render();wlScroll()};
 ACT.wlfilter=function(b){wlUI.f=b.dataset.v;wlUI.sel=null;render()};
 ACT.wlearn=function(){if(!(state.settings.fhKey||'').trim()){toast('Add your Finnhub key on the Account page first');return}wlEarnRefresh(true)};
 ACT.wleadd=function(b){wlUI.edE=b.dataset.id;wlUI.sel=b.dataset.id;render();var i=document.querySelector('[data-wle="date"][data-id="'+b.dataset.id+'"]');if(i){i.focus();try{i.showPicker()}catch(x){}}};
